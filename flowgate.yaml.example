@@ -1,0 +1,47 @@
+# FlowGate Configuration
+# Copy this file to flowgate.yaml and edit as needed.
+# Environment variables can be referenced with ${VAR_NAME} syntax.
+
+server:
+  host: 127.0.0.1
+  port: 7798
+
+# Smart Router is disabled by default in Phase 1
+smart_router:
+  enabled: false
+  tiers:
+    SIMPLE: gpt-4o-mini
+    MEDIUM: gpt-4o
+    COMPLEX: claude-sonnet
+    REASONING: o1-preview
+  tier_boundaries:
+    simple_medium: 0.15
+    medium_complex: 0.35
+    complex_reasoning: 0.60
+
+# Dynamic Skills are disabled by default in Phase 1
+skills:
+  enabled: false
+  db_path: ./skills.chroma
+
+database:
+  path: ./data.db
+
+logging:
+  level: INFO
+  log_prompts: true
+  log_responses: true
+  redact_secrets: true          # Auto-redact API key patterns in logs
+
+# Security settings
+security:
+  vault_enabled: true            # Enable encrypted API key vault
+  auth_token_ttl_minutes: 60     # Dashboard auth token lifetime
+
+  ip_whitelist:
+    enabled: true
+    mode: local_only             # local_only | whitelist | open
+    # allowed_ips (used when mode=whitelist):
+    #   - 127.0.0.1
+    #   - ::1
+    #   - 192.168.1.0/24

@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+*.whl
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Project data
+data.db
+*.chroma/
+skills.chroma/
+
+# Environment
+.env
+.env.local
+flowgate.yaml
+
+# Frontend
+frontend/node_modules/
+frontend/out/
+frontend/.next/
+
+# Built static (regenerated from frontend)
+src/flowgate/static/*
+!src/flowgate/static/.gitkeep
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Internal documentation (not published to GitHub)
+DESIGN.md
+TESTING.md
