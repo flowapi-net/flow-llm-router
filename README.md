@@ -2,44 +2,33 @@
   <img src="flowapi_logo.png" alt="nanobot" width="500">
   <h1>🚀 Flow-LLM-Router: The Ultimate "Token Saver"</h1>
   <p>
+      <a href="https://pypi.org/project/flow-llm-router/"><img src="https://img.shields.io/pypi/v/flow-llm-router" alt="PyPI"></a>
     <img src="https://img.shields.io/badge/python-≥3.11-blue" alt="Python">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
   </p>
 </div>
 
 
-## 📢 Stop Paying the "Token Tax". Cut Your Total LLM Costs by 70%.
+### 👉  To drastically reduce your AI Agent costs, you need to optimize both Token Price and Token Usage. 
 
-To drastically reduce your AI Agent costs, you need to optimize both Token Price and Token Usage. We provide the complete 2-step solution:
+### We provide the complete 2-step solution:
 
-🌍 1. The Lowest API Price
+- ###  ⚡️ The Most Cost-Effective LLM Platformn at [FlowAPI Platform](https://flowapi.net).
 
-💻 2. The Token-Saving Router
-
-
+- ###   🐈 **Flow-LLM-Router** Your Local AI Control Plane to Save Token.
+***
 
 ## 🔥 Core Features of the flow-llm-router
 
-1. 🧰 Dynamic Skill Loading (Eliminate the "Token Tax")
+- ###  📊 Automated Token Analytics Dashboard
 
-Stop sending 50 tool definitions in every API call. FlowGate automatically analyzes the user's intent and injects only the top 3 most relevant skills/tools into the prompt.
-👉 Impact: Drastically reduces input tokens, saves money, and improves model reasoning by reducing context noise.
+- ###  🧠 Smart API Routing (Rules & Classifiers)
 
-1. 🧠 Smart API Routing (Rules & Classifiers)
+- ###  🧰 Dynamic Skill Loading (Eliminate the "Token Tax")
 
-Don't use a sledgehammer to crack a nut. FlowGate features a built-in routing engine.
-Define rules or use our lightweight local classifier to route simple queries to cheaper models (e.g., gpt-4o-mini, llama-3) and complex reasoning tasks to premium models.
-👉 Impact: Achieves the perfect balance between high intelligence and low cost.
+- ###  🔒 Secure, Local API Key Management
 
-1. 📊 Automated Token Analytics Dashboard
-
-Built-in beautiful local web dashboard (built with Next.js/TypeScript). Instantly identify your "Token Assassins." Visualize exactly which models, endpoints, or specific prompts are costing you the most.
-👉 Impact: Full transparency. What gets measured, gets optimized.
-
-1. 🔒 Secure, Local API Key Management
-
-Your API keys and prompts are yours. FlowGate stores your credentials locally and encrypted. Your app talks to a single OpenAI-style base URL (<http://localhost:8000/v1>), and FlowGate securely handles the downstream provider authentication.
-👉 Impact: 100% privacy and no vendor lock-in.
+***
 
 ## At A Glance
 
