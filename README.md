@@ -1,67 +1,50 @@
-# 🚀 Flow-LLM-Router: The Ultimate "Token Saver"
-
 <div align="center">
-
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-OpenAI--Compatible-009688)](https://fastapi.tiangolo.com/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Docs](https://img.shields.io/badge/docs-English-informational)](docs/ARCHITECTURE.md)
-[![FlowAPI](https://img.shields.io/badge/upstream-FlowAPI.net-black)](https://flowapi.net)
-
+  <img src="flowapi_logo.png" alt="nanobot" width="500">
+  <h1>🚀 Flow-LLM-Router: The Ultimate "Token Saver"</h1>
+  <p>
+    <img src="https://img.shields.io/badge/python-≥3.11-blue" alt="Python">
+    <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  </p>
 </div>
 
-<br />
 
-\<div align="center"> \<h3>Stop Paying the "Token Tax". Cut Your Total LLM Costs by 70%.\</h3> \<p>To drastically reduce your AI Agent costs, you need to optimize both \<strong>Token Price\</strong> and \<strong>Token Usage\</strong>. We provide the complete 2-step solution:\</p>
+## 📢 Stop Paying the "Token Tax". Cut Your Total LLM Costs by 70%.
 
-<br />
+To drastically reduce your AI Agent costs, you need to optimize both Token Price and Token Usage. We provide the complete 2-step solution:
 
-\<table align="center" width="100%"> \<tr> \<td align="center" width="50%"> \<h3>🌍 1. The Lowest API Price\</h3> \<p>\<strong>\<a href="https\://www\.google.com/search?q=https\://flowapi.net">FlowAPI.net Platform\</a>\</strong>\</p> \<p>Get premium models (GPT-4o, Claude 3.5 Sonnet) at wholesale prices—\<strong>30% cheaper\</strong> than official rates.\</p> \<p>👉 \<strong>\<a href="https\://www\.google.com/search?q=https\://flowapi.net">Claim Free Test Key Here\</a>\</strong> 👈\</p> \</td> \<td align="center" width="50%"> \<h3>💻 2. The Token-Saving Router\</h3> \<p>\<strong>Flow-LLM-Router (This Repo)\</strong>\</p> \<p>An open-source, local-first gateway that slashes your token consumption by up to \<strong>40%\</strong> via smart routing and dynamic skills.\</p> \<p>👇 \<strong>Scroll Down to Quick Start\</strong> 👇\</p> \</td> \</tr> \</table> \</div>
+🌍 1. The Lowest API Price
 
-##
+💻 2. The Token-Saving Router
 
-<br />
 
-## 💡 The Problem: AI Bills Are Out of Control
 
-When building complex AI Agents or multi-step LLM workflows, your API costs can easily spiral out of control. Why? Because current frameworks are incredibly inefficient:
+## 🔥 Core Features of the flow-llm-router
 
-- They send **dozens of unused tools/skills** in the system prompt for *every single turn* of the conversation.
-- They route **trivial tasks** (like simple formatting) to expensive flagship models (like GPT-4o or Claude 3.5 Sonnet).
-- You have **zero visibility** into which specific step or agent is burning through your tokens.
+1. 🧰 Dynamic Skill Loading (Eliminate the "Token Tax")
 
-## ✨ Enter **Flow-LLM-Router**: Your Local AI Control Plane
+Stop sending 50 tool definitions in every API call. FlowGate automatically analyzes the user's intent and injects only the top 3 most relevant skills/tools into the prompt.
+👉 Impact: Drastically reduces input tokens, saves money, and improves model reasoning by reducing context noise.
 
-**Flow-LLM-Router  **is an open-source, OpenAI-compatible proxy that sits directly between your application and model providers. It acts as a smart filter and router, optimizing your requests *before* they hit the billing meters.
+1. 🧠 Smart API Routing (Rules & Classifiers)
 
-It is designed for developers who want a practical, self-hosted control plane to reduce token usage—**without sending prompts or logs to a third-party observability platform.**
+Don't use a sledgehammer to crack a nut. FlowGate features a built-in routing engine.
+Define rules or use our lightweight local classifier to route simple queries to cheaper models (e.g., gpt-4o-mini, llama-3) and complex reasoning tasks to premium models.
+👉 Impact: Achieves the perfect balance between high intelligence and low cost.
 
-<br />
+1. 📊 Automated Token Analytics Dashboard
 
-## 🔥 Core Features of the Local Router
+Built-in beautiful local web dashboard (built with Next.js/TypeScript). Instantly identify your "Token Assassins." Visualize exactly which models, endpoints, or specific prompts are costing you the most.
+👉 Impact: Full transparency. What gets measured, gets optimized.
 
-#### 1. 🧰 Dynamic Skill Loading (Eliminate the "Token Tax")
+1. 🔒 Secure, Local API Key Management
 
-Stop sending 50 tool definitions in every API call. FlowGate automatically analyzes the user's intent and **injects only the top 3 most relevant skills/tools** into the prompt. *👉* ***Impact:*** *Drastically reduces input tokens, saves money, and improves model reasoning by reducing context noise.*
-
-#### 2. 🧠 Smart API Routing (Rules & Classifiers)
-
-Don't use a sledgehammer to crack a nut. FlowGate features a built-in routing engine. Define rules or use our lightweight local classifier to route simple queries to cheaper models (e.g., `gpt-4o-mini`, `llama-3`) and complex reasoning tasks to premium models. *👉* ***Impact:*** *Achieves the perfect balance between high intelligence and low cost.*
-
-#### 3. 📊 Automated Token Analytics Dashboard
-
-Built-in beautiful local web dashboard (built with Next.js/TypeScript). Instantly identify your "Token Assassins." Visualize exactly which models, endpoints, or specific prompts are costing you the most. *👉* ***Impact:*** *Full transparency. What gets measured, gets optimized.*
-
-#### 4. 🔒 Secure, Local API Key Management
-
-Your API keys and prompts are yours. FlowGate stores your credentials locally and encrypted. Your app talks to a single OpenAI-style base URL (`http://localhost:8000/v1`), and FlowGate securely handles the downstream provider authentication. *👉* ***Impact:*** *100% privacy and no vendor lock-in.*
-
-<br />
+Your API keys and prompts are yours. FlowGate stores your credentials locally and encrypted. Your app talks to a single OpenAI-style base URL (<http://localhost:8000/v1>), and FlowGate securely handles the downstream provider authentication.
+👉 Impact: 100% privacy and no vendor lock-in.
 
 ## At A Glance
 
 - [The Problem](#the-problem)
-- [Why Flow-LLM-Router](#why-flowgate)
+- [Why FlowGate](#why-flowgate)
 - [Who It Is For](#who-it-is-for)
 - [Use Cases](#use-cases)
 - [Why Pair It With FlowAPI](#why-pair-it-with-flowapi)
@@ -70,7 +53,7 @@ Your API keys and prompts are yours. FlowGate stores your credentials locally an
 - [Documentation](#documentation)
 - [FAQ](#faq)
 
-## Why **Flow-LLM-Router**
+## Why Flow-LLM-Router
 
 - **OpenAI-compatible by default**: point existing SDKs to `http://host:7798/v1` and keep most client code unchanged.
 - **Local-first observability**: request logs, token usage, latency, and routing metadata stay in local SQLite.
@@ -227,9 +210,9 @@ Cost optimization gets much easier once the waste is visible.
 
 ### 6. Skills-ready foundation
 
-FlowGate includes optional skills-related configuration and package extras for teams exploring retrieval- or tool-related prompt optimization.
+FlowGate includes optional skills-related configuration and package extras for teams exploring retrieval- and tool-oriented prompt optimization.
 
-That makes the repository a good base for reducing prompt overhead over time, especially in agent-heavy workflows where token bloat tends to accumulate.
+In the current repository, this is best understood as a foundation for prompt-efficiency work rather than a fully productized dynamic skill-routing system.
 
 ## Install
 
