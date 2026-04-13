@@ -3,7 +3,7 @@
 import { AreaChart, BarChart, Card, DonutChart, Metric, Text } from "@tremor/react";
 import useSWR from "swr";
 import { apiURL } from "@/lib/api";
-import { formatCost, formatTokens, formatLatency } from "@/lib/utils";
+import { formatTokens, formatLatency } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -52,8 +52,8 @@ export default function DashboardPage() {
           sub={stats ? `${formatTokens(stats.total_prompt_tokens)} in / ${formatTokens(stats.total_completion_tokens)} out` : undefined}
         />
         <KPICard
-          title="Today Cost"
-          value={stats ? formatCost(stats.total_cost_usd) : "—"}
+          title="Errors Today"
+          value={stats ? String(stats.error_count) : "—"}
         />
         <KPICard
           title="Avg Latency"
@@ -81,15 +81,15 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Provider Pie */}
         <Card>
-          <Text className="font-semibold">Cost by Provider (30d)</Text>
+          <Text className="font-semibold">Tokens by Provider (30d)</Text>
           {providerData.length > 0 ? (
             <DonutChart
               className="mt-4 h-52"
               data={providerData}
-              category="cost"
+              category="tokens"
               index="provider"
               colors={["blue", "cyan", "indigo", "violet", "fuchsia"]}
-              valueFormatter={(v: number) => formatCost(v)}
+              valueFormatter={(v: number) => formatTokens(v)}
               showAnimation
             />
           ) : (

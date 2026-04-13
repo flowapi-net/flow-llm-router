@@ -1,3 +1,3 @@
-"""FlowGate - Local-first LLM gateway with cost audit dashboard."""
+"""FlowGate - Local-first LLM gateway with token usage analytics."""
 
 __version__ = "0.1.0"

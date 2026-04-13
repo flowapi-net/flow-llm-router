@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "FlowGate Dashboard",
-  description: "Local-first LLM gateway cost audit dashboard",
+  description: "Local-first LLM gateway with token usage analytics",
 };
 
 function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
@@ -36,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <NavLink href="/analytics/">Analytics</NavLink>
                   <NavLink href="/providers/">Providers</NavLink>
                   <NavLink href="/models/">Models</NavLink>
+                  <NavLink href="/router/">Router</NavLink>
                   <NavLink href="/integrate/">API</NavLink>
                   <NavLink href="/settings/">Settings</NavLink>
                 </div>

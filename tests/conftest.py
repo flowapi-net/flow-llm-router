@@ -79,6 +79,9 @@ async def client(test_settings):
 
     app = create_app(settings=test_settings)
 
+    from flowgate.smart_router.service import SmartRouterService
+    app.state.smart_router_service = SmartRouterService(test_settings.smart_router)
+
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",

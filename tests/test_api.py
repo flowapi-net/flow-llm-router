@@ -250,7 +250,6 @@ async def _insert_log(client, **overrides):
         prompt_tokens=100,
         completion_tokens=50,
         total_tokens=150,
-        cost_usd=0.001,
         latency_ms=300,
         status="success",
     )
@@ -277,7 +276,7 @@ class TestStatsOverview:
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["total_requests"] == 0
-        assert data["total_cost_usd"] == 0.0
+        assert "total_tokens" in data
         assert data["success_rate"] == 100.0
 
     async def test_period_parameter(self, client):
@@ -372,3 +371,65 @@ class TestTokenAuthMiddleware:
             "api_key": "sk-valid1234567890abcdef",
         })
         assert resp.status_code == 201
+
+# ════════════════════════════════════════════════════════════════
+# IP Whitelist CRUD API
+# ════════════════════════════════════════════════════════════════
+
+
+class TestIPWhitelistAPI:
+    async def test_get_ip_whitelist_requires_auth(self, client):
+        resp = await client.get("/api/security/ip-whitelist")
+        assert resp.status_code == 401
+
+    async def test_get_ip_whitelist_authed(self, authed_client):
+        resp = await authed_client.get("/api/security/ip-whitelist")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        data = body["data"]
+        assert "mode" in data
+        assert "allowed_ips" in data
+        assert "enabled" in data
+
+    async def test_put_ip_whitelist_requires_auth(self, client):
+        resp = await client.put("/api/security/ip-whitelist", json={"mode": "open"})
+        assert resp.status_code == 401
+
+    async def test_put_ip_whitelist_update_mode(self, authed_client):
+        resp = await authed_client.put(
+            "/api/security/ip-whitelist",
+            json={"mode": "open"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["mode"] == "open"
+
+    async def test_put_ip_whitelist_update_allowed_ips(self, authed_client):
+        resp = await authed_client.put(
+            "/api/security/ip-whitelist",
+            json={"mode": "whitelist", "allowed_ips": ["127.0.0.1", "192.168.1.0/24"]},
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["mode"] == "whitelist"
+        assert "192.168.1.0/24" in data["allowed_ips"]
+
+    async def test_put_ip_whitelist_invalid_mode(self, authed_client):
+        resp = await authed_client.put(
+            "/api/security/ip-whitelist",
+            json={"mode": "invalid_mode"},
+        )
+        assert resp.status_code == 422
+
+    async def test_get_reflects_put_changes(self, authed_client):
+        """GET after PUT should reflect the updated configuration."""
+        await authed_client.put(
+            "/api/security/ip-whitelist",
+            json={"mode": "whitelist", "allowed_ips": ["10.0.0.1"]},
+        )
+        resp = await authed_client.get("/api/security/ip-whitelist")
+        data = resp.json()["data"]
+        assert data["mode"] == "whitelist"
+        assert "10.0.0.1" in data["allowed_ips"]

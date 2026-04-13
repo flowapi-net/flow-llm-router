@@ -74,7 +74,8 @@ async def _fetch_models_from_provider(
     return []
 
 
-def _default_base_url(provider: str) -> str:
+def default_base_url_for_provider(provider: str) -> str:
+    """OpenAI-compatible base URL for a known provider slug (used by sync + MF embedding)."""
     mapping = {
         "openai": "https://api.openai.com/v1",
         "anthropic": "https://api.anthropic.com/v1",
@@ -158,7 +159,7 @@ async def sync_models(
             except Exception:
                 pass
         if not base_url:
-            base_url = _default_base_url(provider_name)
+            base_url = default_base_url_for_provider(provider_name)
         if not base_url:
             raise HTTPException(
                 status_code=422,

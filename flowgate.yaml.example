@@ -6,18 +6,34 @@ server:
   host: 127.0.0.1
   port: 7798
 
-# Smart Router is disabled by default in Phase 1
+# Smart Router — auto-route requests to different models by complexity
+# Configure via the /router page in the dashboard (recommended) or here.
 smart_router:
   enabled: false
+  strategy: complexity             # complexity | classifier | off
+  # --- Rule-based (complexity strategy) ---
   tiers:
     SIMPLE: gpt-4o-mini
     MEDIUM: gpt-4o
     COMPLEX: claude-sonnet
     REASONING: o1-preview
   tier_boundaries:
-    simple_medium: 0.15
-    medium_complex: 0.35
-    complex_reasoning: 0.60
+    simple_medium: 0.25
+    medium_complex: 0.50
+    complex_reasoning: 0.75
+  # dimension_weights:             # Advanced: adjust scoring weights
+  #   tokenCount: 0.15
+  #   codePresence: 0.20
+  #   reasoningMarkers: 0.25
+  #   technicalTerms: 0.15
+  #   simpleIndicators: 0.15
+  #   multiStepPatterns: 0.05
+  #   questionComplexity: 0.05
+  # --- Trained classifier (classifier strategy, requires routellm) ---
+  # classifier_type: mf            # mf | bert | sw_ranking | causal_llm
+  # classifier_threshold: 0.5
+  # classifier_strong_model: gpt-4o
+  # classifier_weak_model: gpt-4o-mini
 
 # Dynamic Skills are disabled by default in Phase 1
 skills:
@@ -37,6 +53,7 @@ logging:
 security:
   vault_enabled: true            # Enable encrypted API key vault
   auth_token_ttl_minutes: 60     # Dashboard auth token lifetime
+  master_key_path: ~/.flowgate/master.key  # Persisted Fernet key for auto-unlock
 
   ip_whitelist:
     enabled: true

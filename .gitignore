@@ -47,3 +47,4 @@ htmlcov/
 # Internal documentation (not published to GitHub)
 DESIGN.md
 TESTING.md
+.gstack/

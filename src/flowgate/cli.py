@@ -14,7 +14,7 @@ from flowgate import __version__
 
 app = typer.Typer(
     name="flow-router",
-    help="FlowGate - Local-first LLM gateway with cost audit dashboard",
+    help="FlowGate - Local-first LLM gateway with token usage analytics",
     add_completion=False,
 )
 console = Console()
@@ -39,7 +39,10 @@ def start(
     actual_port = port or settings.server.port
 
     if settings.security.vault_enabled and not os.environ.get("FLOWGATE_MASTER_PASSWORD"):
-        _prompt_master_password(settings)
+        from flowgate.security.master_key_store import has_master_key
+
+        if not has_master_key(settings):
+            _prompt_master_password(settings)
 
     console.print(
         Panel.fit(
@@ -167,6 +170,7 @@ def _prompt_master_password(settings) -> None:
 
     from flowgate.db.engine import get_session, init_db
     from flowgate.db.models import VaultMeta
+    from flowgate.security.master_key_store import save_master_key
     from flowgate.security.vault import Vault
 
     init_db(settings.database.path)
@@ -186,7 +190,14 @@ def _prompt_master_password(settings) -> None:
         return
 
     os.environ["FLOWGATE_MASTER_PASSWORD"] = password
-    console.print("[green]Vault will be unlocked on startup.[/green]")
+    try:
+        salt = base64.b64decode(meta.salt)
+        temp_vault = Vault()
+        temp_vault.initialize(password, salt=salt)
+        save_master_key(settings, temp_vault.export_key())
+        console.print("[green]Vault will be unlocked on startup (master key persisted).[/green]")
+    except Exception:
+        console.print("[yellow]Vault unlocked for this run, but failed to persist master key.[/yellow]")
 
 
 if __name__ == "__main__":

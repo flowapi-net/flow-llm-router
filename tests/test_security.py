@@ -8,7 +8,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from flowgate.config import SecurityConfig, Settings
 from flowgate.security.ip_guard import IPGuardMiddleware
+from flowgate.security.master_key_store import has_master_key, load_master_key, save_master_key
 from flowgate.security.redact import redact_headers, redact_secrets
 from flowgate.security.vault import (
     InvalidPasswordError,
@@ -55,6 +57,26 @@ class TestVaultInitialization:
         v = Vault()
         with pytest.raises(VaultNotInitializedError):
             v.decrypt_key("any")
+
+    def test_initialize_from_exported_key_roundtrip(self):
+        v1 = Vault()
+        v1.initialize("password")
+        exported_key = v1.export_key()
+        ciphertext = v1.encrypt_key("secret")
+
+        v2 = Vault()
+        v2.initialize_from_key(exported_key)
+        assert v2.decrypt_key(ciphertext) == "secret"
+
+    def test_lock_clears_runtime_material(self):
+        v = Vault()
+        v.initialize("password")
+        encrypted = v.encrypt_key("sk-openai-xxx")
+        v.add_to_cache("openai", encrypted)
+        v.lock()
+        assert v.is_initialized is False
+        with pytest.raises(VaultNotInitializedError):
+            v.decrypt_key(encrypted)
 
 
 class TestVaultEncryption:
@@ -154,6 +176,21 @@ class TestVaultHelpers:
 
     def test_mask_key_exact_8(self):
         assert Vault.mask_key("12345678") == "****"
+
+
+class TestMasterKeyStore:
+    def test_save_and_load_roundtrip(self, tmp_path):
+        key_path = tmp_path / "master.key"
+        settings = Settings(security=SecurityConfig(master_key_path=str(key_path)))
+        save_master_key(settings, "test-fernet-key")
+        assert load_master_key(settings) == "test-fernet-key"
+
+    def test_has_master_key(self, tmp_path):
+        key_path = tmp_path / "master.key"
+        settings = Settings(security=SecurityConfig(master_key_path=str(key_path)))
+        assert has_master_key(settings) is False
+        save_master_key(settings, "test-fernet-key")
+        assert has_master_key(settings) is True
 
 
 # ════════════════════════════════════════════════════════════════

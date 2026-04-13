@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, Text } from "@tremor/react";
 import { AuthExpiredError, fetchAPI, getAuthToken } from "@/lib/api";
 
@@ -81,10 +81,12 @@ function AddKeyDialog({
   onSuccess,
   onCancel,
   onAuthExpired,
+  existingProviders = [],
 }: {
   onSuccess: () => void;
   onCancel: () => void;
   onAuthExpired?: () => void;
+  existingProviders?: string[];
 }) {
   const [provider, setProvider] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -97,6 +99,10 @@ function AddKeyDialog({
   const handleSubmit = async () => {
     setError("");
     if (!providerNorm) { setError("Provider name is required"); return; }
+    if (existingProviders.includes(providerNorm)) {
+      setError(`Provider "${providerNorm}" already exists. Please use a different name.`);
+      return;
+    }
     if (!apiKey.trim()) { setError("API Key is required"); return; }
     setLoading(true);
     try {
@@ -176,17 +182,27 @@ function AddKeyDialog({
 
 /* ── Integration Guide ── */
 
-const SNIPPETS = {
-  curl: `curl http://127.0.0.1:7798/v1/chat/completions \\
+function useProxyBase() {
+  const [base, setBase] = useState("http://127.0.0.1:7789");
+  useEffect(() => {
+    if (typeof window !== "undefined") setBase(window.location.origin);
+  }, []);
+  return base;
+}
+
+function buildSnippets(base: string) {
+  const b = `${base}/v1`;
+  return {
+    curl: `curl ${b}/chat/completions \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "gpt-4o-mini",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'`,
-  python: `from openai import OpenAI
+    python: `from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://127.0.0.1:7798/v1",
+    base_url="${b}",
     api_key="any",          # FlowGate 管密钥，这里随便填
 )
 
@@ -195,10 +211,10 @@ resp = client.chat.completions.create(
     messages=[{"role": "user", "content": "Hello!"}],
 )
 print(resp.choices[0].message.content)`,
-  js: `import OpenAI from "openai";
+    js: `import OpenAI from "openai";
 
 const client = new OpenAI({
-  baseURL: "http://127.0.0.1:7798/v1",
+  baseURL: "${b}",
   apiKey: "any",            // FlowGate 管密钥，这里随便填
   dangerouslyAllowBrowser: true,
 });
@@ -208,25 +224,28 @@ const resp = await client.chat.completions.create({
   messages: [{ role: "user", content: "Hello!" }],
 });
 console.log(resp.choices[0].message.content);`,
-  langchain: `from langchain_openai import ChatOpenAI
+    langchain: `from langchain_openai import ChatOpenAI
 
 llm = ChatOpenAI(
     model="gpt-4o-mini",
-    openai_api_base="http://127.0.0.1:7798/v1",
+    openai_api_base="${b}",
     openai_api_key="any",
 )
 print(llm.invoke("Hello!").content)`,
-};
+  };
+}
 
-type SnippetKey = keyof typeof SNIPPETS;
+type SnippetKey = keyof ReturnType<typeof buildSnippets>;
 
 function IntegrationGuide() {
+  const base = useProxyBase();
+  const snippets = useMemo(() => buildSnippets(base), [base]);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<SnippetKey>("python");
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
-    navigator.clipboard.writeText(SNIPPETS[tab]);
+    navigator.clipboard.writeText(snippets[tab]);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -242,7 +261,7 @@ function IntegrationGuide() {
           <span className="text-blue-600 text-base">⚡</span>
           <span className="text-sm font-semibold text-blue-800">如何接入 FlowGate 代理</span>
           <span className="font-mono text-xs bg-white border border-blue-200 text-blue-700 px-2 py-0.5 rounded">
-            POST http://127.0.0.1:7798/v1/chat/completions
+            POST {base}/v1/chat/completions
           </span>
         </div>
         <span className="text-blue-400 text-sm">{open ? "▲ 收起" : "▼ 展开"}</span>
@@ -252,14 +271,14 @@ function IntegrationGuide() {
         <div className="px-5 pb-5 space-y-3">
           <p className="text-xs text-blue-700">
             将你代码中的 <code className="bg-white px-1 py-0.5 rounded border border-blue-200">base_url</code> 改成
-            {" "}<code className="bg-white px-1 py-0.5 rounded border border-blue-200">http://127.0.0.1:7798/v1</code>，
+            {" "}<code className="bg-white px-1 py-0.5 rounded border border-blue-200">{base}/v1</code>，
             <code className="bg-white px-1 py-0.5 rounded border border-blue-200">api_key</code> 随便填（FlowGate 统一管理密钥）。
             所有请求会自动路由到下方配置的 Provider。
           </p>
 
           {/* Tab bar */}
           <div className="flex gap-1">
-            {(Object.keys(SNIPPETS) as SnippetKey[]).map((k) => (
+            {(Object.keys(snippets) as SnippetKey[]).map((k) => (
               <button
                 key={k}
                 onClick={() => setTab(k)}
@@ -277,7 +296,7 @@ function IntegrationGuide() {
           {/* Code block */}
           <div className="relative">
             <pre className="bg-gray-900 text-gray-100 text-xs rounded-lg p-4 overflow-x-auto leading-relaxed">
-              {SNIPPETS[tab]}
+              {snippets[tab]}
             </pre>
             <button
               onClick={copy}
@@ -500,6 +519,7 @@ export default function ProvidersPage() {
             setShowAddDialog(false);
             requireAuth(() => setShowAddDialog(true));
           }}
+          existingProviders={keys.map((k) => k.provider)}
         />
       )}
       {showReAuth && (

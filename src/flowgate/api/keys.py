@@ -95,6 +95,20 @@ async def add_key(
     vault = _get_vault(request)
     db_path = _get_db_path(request)
 
+    # Enforce unique provider name
+    session_check = get_session(db_path)
+    try:
+        existing = session_check.exec(
+            select(ProviderKey).where(ProviderKey.provider == body.provider)
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Provider '{body.provider}' already exists. Delete the existing entry first or use a different name.",
+            )
+    finally:
+        session_check.close()
+
     encrypted = vault.encrypt_key(body.api_key)
     suffix = body.api_key[-4:] if len(body.api_key) >= 4 else body.api_key
 

@@ -4,6 +4,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@tremor/react";
 import { fetchAPI } from "@/lib/api";
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+      title="Copy full model name"
+      className={`text-xs px-2 py-0.5 rounded transition-colors ${copied ? "text-green-600 bg-green-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"}`}
+    >
+      {copied ? "✓" : "Copy"}
+    </button>
+  );
+}
+
 interface ModelItem {
   id: string;
   provider: string;
@@ -43,7 +56,8 @@ export default function ModelsPage() {
     return models.filter((m) => {
       const matchProvider = activeProvider === "all" || m.provider === activeProvider;
       const q = search.toLowerCase();
-      const matchSearch = !q || m.model_id.toLowerCase().includes(q) || (m.owned_by || "").toLowerCase().includes(q);
+      const fullName = `${m.provider}/${m.model_id}`;
+      const matchSearch = !q || fullName.toLowerCase().includes(q);
       return matchProvider && matchSearch;
     });
   }, [models, activeProvider, search]);
@@ -131,26 +145,18 @@ export default function ModelsPage() {
                 </span>
               </div>
               <div className="divide-y divide-gray-50">
-                {items.map((m) => (
+                {items.map((m) => {
+                  const fullName = `${m.provider}/${m.model_id}`;
+                  return (
                   <div
                     key={m.id}
                     className="px-5 py-2.5 flex items-center justify-between hover:bg-gray-50"
                   >
-                    <div>
-                      <span className="font-mono text-sm text-gray-800">{m.model_id}</span>
-                      {m.owned_by && m.owned_by !== provider && (
-                        <span className="ml-2 text-xs text-gray-400">{m.owned_by}</span>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(m.model_id)}
-                      title="Copy model ID"
-                      className="text-xs text-gray-400 hover:text-gray-600 px-2 py-0.5 rounded hover:bg-gray-100"
-                    >
-                      Copy
-                    </button>
+                    <span className="font-mono text-sm text-gray-800">{fullName}</span>
+                    <CopyButton text={fullName} />
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </Card>
           ))}

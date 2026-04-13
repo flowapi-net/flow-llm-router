@@ -18,6 +18,7 @@ class ServerConfig:
 @dataclass
 class SmartRouterConfig:
     enabled: bool = False
+    strategy: str = "complexity"  # "complexity" | "classifier" | "off"
     tiers: dict[str, str] = field(default_factory=lambda: {
         "SIMPLE": "gpt-4o-mini",
         "MEDIUM": "gpt-4o",
@@ -25,10 +26,36 @@ class SmartRouterConfig:
         "REASONING": "o1-preview",
     })
     tier_boundaries: dict[str, float] = field(default_factory=lambda: {
-        "simple_medium": 0.15,
-        "medium_complex": 0.35,
-        "complex_reasoning": 0.60,
+        "simple_medium": 0.25,
+        "medium_complex": 0.50,
+        "complex_reasoning": 0.75,
     })
+    dimension_weights: dict[str, float] = field(default_factory=lambda: {
+        "tokenCount": 0.15,
+        "codePresence": 0.20,
+        "reasoningMarkers": 0.25,
+        "technicalTerms": 0.15,
+        "simpleIndicators": 0.15,
+        "multiStepPatterns": 0.05,
+        "questionComplexity": 0.05,
+    })
+    # RouteLLM classifier settings
+    classifier_type: str = "bert"
+    # Tier boundaries for the classifier score (0–1).
+    # Calibrated against BERT router's observed score distribution (~0.18–0.57).
+    # The same 4-tier model mapping from `tiers` is reused.
+    classifier_tier_boundaries: dict[str, float] = field(default_factory=lambda: {
+        "simple_medium": 0.28,
+        "medium_complex": 0.40,
+        "complex_reasoning": 0.50,
+    })
+    # MF router embedding settings (only used when classifier_type == "mf").
+    # FlowGate monkey-patches routellm.routers.similarity_weighted.utils.OPENAI_CLIENT
+    # with a custom OpenAI client so no RouteLLM source changes are needed.
+    mf_embedding_base_url: str = ""   # empty → use OPENAI_BASE_URL env or OpenAI default
+    mf_embedding_api_key: str = ""    # empty → use OPENAI_API_KEY env
+    # Model id from synced /api/models catalog (UI dropdown). Empty → MF uses text-embedding-3-small at runtime.
+    mf_embedding_model: str = ""
 
 
 @dataclass
@@ -62,6 +89,7 @@ class SecurityConfig:
     vault_enabled: bool = True
     ip_whitelist: IPWhitelistConfig = field(default_factory=IPWhitelistConfig)
     auth_token_ttl_minutes: int = 60
+    master_key_path: str = "~/.flowgate/master.key"
 
 
 @dataclass
@@ -127,8 +155,18 @@ def load_settings(config_path: str | None = None) -> Settings:
         sr = raw["smart_router"]
         settings.smart_router = SmartRouterConfig(
             enabled=sr.get("enabled", False),
+            strategy=sr.get("strategy", "complexity"),
             tiers=sr.get("tiers", settings.smart_router.tiers),
             tier_boundaries=sr.get("tier_boundaries", settings.smart_router.tier_boundaries),
+            dimension_weights=sr.get("dimension_weights", settings.smart_router.dimension_weights),
+            classifier_type=sr.get("classifier_type", "bert"),
+            classifier_tier_boundaries=sr.get(
+                "classifier_tier_boundaries",
+                settings.smart_router.classifier_tier_boundaries,
+            ),
+            mf_embedding_base_url=sr.get("mf_embedding_base_url", settings.smart_router.mf_embedding_base_url),
+            mf_embedding_api_key=sr.get("mf_embedding_api_key", settings.smart_router.mf_embedding_api_key),
+            mf_embedding_model=sr.get("mf_embedding_model", settings.smart_router.mf_embedding_model),
         )
 
     if "skills" in raw:
@@ -155,6 +193,7 @@ def load_settings(config_path: str | None = None) -> Settings:
         settings.security = SecurityConfig(
             vault_enabled=sec.get("vault_enabled", True),
             auth_token_ttl_minutes=sec.get("auth_token_ttl_minutes", 60),
+            master_key_path=sec.get("master_key_path", "~/.flowgate/master.key"),
             ip_whitelist=IPWhitelistConfig(
                 enabled=ip_cfg.get("enabled", True),
                 mode=ip_cfg.get("mode", "local_only"),

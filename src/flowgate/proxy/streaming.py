@@ -8,9 +8,11 @@ from typing import Any, AsyncGenerator
 
 import litellm
 
+from flowgate.config import LoggingConfig
 from flowgate.db.engine import get_session
 from flowgate.db.models import RequestLog
 from flowgate.proxy.schemas import ChatCompletionRequest
+from flowgate.security.redact import redact_secrets as _redact
 
 
 async def stream_completion(
@@ -18,13 +20,20 @@ async def stream_completion(
     request: ChatCompletionRequest,
     db_path: str,
     provider: str = "",
+    log_config: LoggingConfig | None = None,
+    model_requested: str | None = None,
+    complexity_score: float | None = None,
+    complexity_tier: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """Stream litellm response as SSE, then persist log."""
+    if log_config is None:
+        log_config = LoggingConfig()
+
     start = time.monotonic()
     first_chunk_time: float | None = None
     full_content: list[str] = []
     prompt_tokens = completion_tokens = total_tokens = 0
-    cost = 0.0
+    cost_usd = 0.0
     model_used = litellm_kwargs.get("model", request.model)
     error_msg: str | None = None
     status = "success"
@@ -52,10 +61,10 @@ async def stream_completion(
                 total_tokens     = getattr(chunk.usage, "total_tokens",     0) or 0
 
             if hasattr(chunk, "_hidden_params"):
-                cost = chunk._hidden_params.get("response_cost", cost) or cost
                 if not provider:
                     provider = chunk._hidden_params.get("custom_llm_provider", "")
                 model_used = getattr(chunk, "model", model_used) or model_used
+                cost_usd = float(chunk._hidden_params.get("response_cost") or cost_usd)
 
             yield f"data: {chunk.model_dump_json()}\n\n"
 
@@ -71,11 +80,23 @@ async def stream_completion(
     ttft_ms = int((first_chunk_time - start) * 1000) if first_chunk_time else None
 
     _save_log(
-        request=request, model_used=model_used, provider=provider,
-        response_content="".join(full_content), status=status, error_message=error_msg,
-        prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
-        total_tokens=total_tokens, cost_usd=cost,
-        latency_ms=latency_ms, ttft_ms=ttft_ms, db_path=db_path,
+        request=request,
+        model_used=model_used,
+        provider=provider,
+        response_content="".join(full_content),
+        status=status,
+        error_message=error_msg,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        cost_usd=cost_usd,
+        latency_ms=latency_ms,
+        ttft_ms=ttft_ms,
+        db_path=db_path,
+        log_config=log_config,
+        model_requested=model_requested,
+        complexity_score=complexity_score,
+        complexity_tier=complexity_tier,
     )
 
 
@@ -83,21 +104,50 @@ def _save_log(
     *, request: ChatCompletionRequest, model_used: str, provider: str,
     response_content: str, status: str, error_message: str | None,
     prompt_tokens: int, completion_tokens: int, total_tokens: int,
-    cost_usd: float, latency_ms: int, ttft_ms: int | None, db_path: str,
+    cost_usd: float = 0.0,
+    latency_ms: int, ttft_ms: int | None, db_path: str,
+    log_config: LoggingConfig | None = None,
+    model_requested: str | None = None,
+    complexity_score: float | None = None,
+    complexity_tier: str | None = None,
 ) -> None:
-    messages_json = json.dumps(
-        [m.model_dump(exclude_none=True) for m in request.messages], ensure_ascii=False,
-    )
+    if log_config is None:
+        log_config = LoggingConfig()
+
+    if log_config.log_prompts:
+        raw = json.dumps(
+            [m.model_dump(exclude_none=True) for m in request.messages], ensure_ascii=False,
+        )
+        messages_json = _redact(raw) if log_config.redact_secrets else raw
+    else:
+        messages_json = "[redacted]"
+
+    if log_config.log_responses and response_content:
+        stored_response: str | None = _redact(response_content) if log_config.redact_secrets else response_content
+    else:
+        stored_response = None if not log_config.log_responses else (response_content or None)
+
     log = RequestLog(
-        model_requested=request.model, model_used=model_used, provider=provider,
-        messages=messages_json, temperature=request.temperature,
-        max_tokens=request.max_tokens, stream=True,
-        response_content=response_content or None,
-        status=status, error_message=error_message,
-        prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
-        total_tokens=total_tokens, cost_usd=cost_usd,
-        latency_ms=latency_ms, ttft_ms=ttft_ms,
-        session_id=request.session_id, user_tag=request.user_tag,
+        model_requested=model_requested or request.model,
+        model_used=model_used,
+        provider=provider,
+        messages=messages_json,
+        temperature=request.temperature,
+        max_tokens=request.max_tokens,
+        stream=True,
+        complexity_score=complexity_score,
+        complexity_tier=complexity_tier,
+        response_content=stored_response,
+        status=status,
+        error_message=error_message,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        cost_usd=cost_usd,
+        latency_ms=latency_ms,
+        ttft_ms=ttft_ms,
+        session_id=request.session_id,
+        user_tag=request.user_tag,
     )
     session = get_session(db_path)
     try:

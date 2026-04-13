@@ -16,28 +16,33 @@ from flowgate.config import (
 
 
 class TestDefaultSettings:
-    def test_server_defaults(self):
+    def test_server_defaults(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         s = load_settings()
         assert s.server.host == "127.0.0.1"
         assert s.server.port == 7798
 
-    def test_database_default(self):
+    def test_database_default(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         s = load_settings()
         assert s.database.path == "./data.db"
 
-    def test_logging_defaults(self):
+    def test_logging_defaults(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         s = load_settings()
         assert s.logging.level == "INFO"
         assert s.logging.log_prompts is True
         assert s.logging.log_responses is True
         assert s.logging.redact_secrets is True
 
-    def test_security_defaults(self):
+    def test_security_defaults(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         s = load_settings()
         assert s.security.vault_enabled is True
         assert s.security.ip_whitelist.mode == "local_only"
         assert s.security.ip_whitelist.enabled is True
         assert s.security.auth_token_ttl_minutes == 60
+        assert s.security.master_key_path == "~/.flowgate/master.key"
 
 
 class TestLoadFromYAML:
@@ -77,6 +82,7 @@ class TestLoadFromYAML:
             security:
               vault_enabled: false
               auth_token_ttl_minutes: 30
+              master_key_path: /tmp/custom.master.key
               ip_whitelist:
                 enabled: true
                 mode: whitelist
@@ -87,6 +93,7 @@ class TestLoadFromYAML:
         s = load_settings(str(cfg))
         assert s.security.vault_enabled is False
         assert s.security.auth_token_ttl_minutes == 30
+        assert s.security.master_key_path == "/tmp/custom.master.key"
         assert s.security.ip_whitelist.mode == "whitelist"
         assert "10.0.0.1" in s.security.ip_whitelist.allowed_ips
 

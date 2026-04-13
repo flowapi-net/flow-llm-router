@@ -1,14 +1,15 @@
-"""Dashboard REST API for statistics, logs, and replay."""
+"""Dashboard REST API for statistics, logs, and security."""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from sqlmodel import Session, col, func, select, text
 
+from flowgate.api.auth import verify_auth_token
 from flowgate.db.engine import get_session
 from flowgate.db.models import RequestLog
 
@@ -47,7 +48,6 @@ async def stats_overview(
             func.sum(RequestLog.prompt_tokens).label("total_prompt_tokens"),
             func.sum(RequestLog.completion_tokens).label("total_completion_tokens"),
             func.sum(RequestLog.total_tokens).label("total_tokens"),
-            func.sum(RequestLog.cost_usd).label("total_cost"),
             func.avg(RequestLog.latency_ms).label("avg_latency_ms"),
             func.count(
                 func.nullif(RequestLog.status, "success")
@@ -59,7 +59,7 @@ async def stats_overview(
         session.close()
 
     total_requests = row[0] or 0
-    success_count = total_requests - (row[6] or 0)
+    success_count = total_requests - (row[5] or 0)
     success_rate = (success_count / total_requests * 100) if total_requests > 0 else 100.0
 
     return {
@@ -69,10 +69,9 @@ async def stats_overview(
             "total_prompt_tokens": row[1] or 0,
             "total_completion_tokens": row[2] or 0,
             "total_tokens": row[3] or 0,
-            "total_cost_usd": round(row[4] or 0, 6),
-            "avg_latency_ms": round(row[5] or 0, 1),
+            "avg_latency_ms": round(row[4] or 0, 1),
             "success_rate": round(success_rate, 1),
-            "error_count": row[6] or 0,
+            "error_count": row[5] or 0,
             "period": period,
         },
     }
@@ -97,8 +96,7 @@ async def stats_timeline(
                 f"""
                 SELECT strftime('{fmt}', created_at) as bucket,
                        COUNT(*) as requests,
-                       COALESCE(SUM(total_tokens), 0) as tokens,
-                       COALESCE(SUM(cost_usd), 0) as cost
+                       COALESCE(SUM(total_tokens), 0) as tokens
                 FROM request_logs
                 WHERE created_at >= :since
                 GROUP BY bucket
@@ -114,7 +112,7 @@ async def stats_timeline(
     return {
         "success": True,
         "data": [
-            {"time": r[0], "requests": r[1], "tokens": r[2], "cost": round(r[3], 6)}
+            {"time": r[0], "requests": r[1], "tokens": r[2]}
             for r in rows
         ],
     }
@@ -136,12 +134,11 @@ async def stats_providers(
                 """
                 SELECT provider,
                        COUNT(*) as requests,
-                       COALESCE(SUM(cost_usd), 0) as cost,
                        COALESCE(SUM(total_tokens), 0) as tokens
                 FROM request_logs
                 WHERE created_at >= :since AND provider != ''
                 GROUP BY provider
-                ORDER BY cost DESC
+                ORDER BY tokens DESC
                 """
             ),
             params={"since": since.isoformat()},
@@ -153,7 +150,7 @@ async def stats_providers(
     return {
         "success": True,
         "data": [
-            {"provider": r[0], "requests": r[1], "cost": round(r[2], 6), "tokens": r[3]}
+            {"provider": r[0], "requests": r[1], "tokens": r[2]}
             for r in rows
         ],
     }
@@ -176,7 +173,6 @@ async def stats_models(
                 """
                 SELECT model_used,
                        COUNT(*) as requests,
-                       COALESCE(SUM(cost_usd), 0) as cost,
                        COALESCE(SUM(total_tokens), 0) as tokens
                 FROM request_logs
                 WHERE created_at >= :since
@@ -194,7 +190,7 @@ async def stats_models(
     return {
         "success": True,
         "data": [
-            {"model": r[0], "requests": r[1], "cost": round(r[2], 6), "tokens": r[3]}
+            {"model": r[0], "requests": r[1], "tokens": r[2]}
             for r in rows
         ],
     }
@@ -248,7 +244,6 @@ async def list_logs(
                 "prompt_tokens": log.prompt_tokens,
                 "completion_tokens": log.completion_tokens,
                 "total_tokens": log.total_tokens,
-                "cost_usd": log.cost_usd,
                 "latency_ms": log.latency_ms,
                 "ttft_ms": log.ttft_ms,
                 "session_id": log.session_id,
@@ -300,7 +295,6 @@ async def get_log(log_id: str, request: Request):
             "prompt_tokens": log.prompt_tokens,
             "completion_tokens": log.completion_tokens,
             "total_tokens": log.total_tokens,
-            "cost_usd": log.cost_usd,
             "latency_ms": log.latency_ms,
             "ttft_ms": log.ttft_ms,
             "session_id": log.session_id,
@@ -334,3 +328,70 @@ async def server_config(request: Request):
         "ip_mode": ip_cfg.mode,
         "allowed_ips": ip_cfg.allowed_ips,
     }
+
+
+# ─── IP Whitelist CRUD ───
+
+@router.get("/security/ip-whitelist")
+async def get_ip_whitelist(
+    request: Request,
+    _auth: bool = Depends(verify_auth_token),
+):
+    """Return current IP whitelist configuration. Requires auth token."""
+    settings = getattr(request.app.state, "settings", None)
+    if settings is None:
+        return {"success": True, "data": {"enabled": True, "mode": "local_only", "allowed_ips": []}}
+
+    ip_cfg = settings.security.ip_whitelist
+    return {
+        "success": True,
+        "data": {
+            "enabled": ip_cfg.enabled,
+            "mode": ip_cfg.mode,
+            "allowed_ips": ip_cfg.allowed_ips,
+        },
+    }
+
+
+@router.put("/security/ip-whitelist")
+async def update_ip_whitelist(
+    body: dict,
+    request: Request,
+    _auth: bool = Depends(verify_auth_token),
+):
+    """Update IP whitelist mode and allowed IPs. Requires auth token.
+
+    Accepted body fields:
+      mode: "local_only" | "whitelist" | "open"
+      allowed_ips: list[str]   (CIDR notation supported)
+      enabled: bool
+    """
+    valid_modes = {"local_only", "whitelist", "open"}
+    mode = body.get("mode")
+    if mode is not None and mode not in valid_modes:
+        return JSONResponse(
+            status_code=422,
+            content={"success": False, "error": f"Invalid mode '{mode}'. Must be one of: {sorted(valid_modes)}"},
+        )
+
+    settings = getattr(request.app.state, "settings", None)
+    if settings is None:
+        return JSONResponse(status_code=503, content={"success": False, "error": "Settings not available"})
+
+    ip_cfg = settings.security.ip_whitelist
+    if mode is not None:
+        ip_cfg.mode = mode
+    if "allowed_ips" in body:
+        ip_cfg.allowed_ips = list(body["allowed_ips"])
+    if "enabled" in body:
+        ip_cfg.enabled = bool(body["enabled"])
+
+    return {
+        "success": True,
+        "data": {
+            "enabled": ip_cfg.enabled,
+            "mode": ip_cfg.mode,
+            "allowed_ips": ip_cfg.allowed_ips,
+        },
+    }
+

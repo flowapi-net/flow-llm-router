@@ -75,6 +75,18 @@ class ProviderModel(SQLModel, table=True):
     synced_at: datetime = Field(default_factory=_utcnow)
 
 
+class RouterConfig(SQLModel, table=True):
+    """Singleton table storing smart router configuration (managed from the UI)."""
+
+    __tablename__ = "router_config"
+
+    id: int = Field(default=1, primary_key=True)
+    enabled: bool = False
+    strategy: str = "complexity"
+    config_json: str = "{}"
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
 class RequestLog(SQLModel, table=True):
     __tablename__ = "request_logs"
 
@@ -100,7 +112,7 @@ class RequestLog(SQLModel, table=True):
     status: str = "success"
     error_message: Optional[str] = None
 
-    # Token & cost
+    # Token usage (cost_usd column retained for existing DBs; unused, always 0)
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0

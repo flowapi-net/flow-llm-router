@@ -12,7 +12,7 @@ interface ServerConfig { host: string; port: number; ip_mode: string; allowed_ip
 
 /* ── Hooks ── */
 function useProxyBase() {
-  const [base, setBase] = useState("http://127.0.0.1:7798");
+  const [base, setBase] = useState("http://127.0.0.1:7789");
   useEffect(() => { if (typeof window !== "undefined") setBase(window.location.origin); }, []);
   return base;
 }

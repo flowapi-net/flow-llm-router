@@ -3,7 +3,7 @@
 import { AreaChart, BarList, Card, DonutChart, Metric, Text } from "@tremor/react";
 import useSWR from "swr";
 import { apiURL } from "@/lib/api";
-import { formatCost, formatTokens } from "@/lib/utils";
+import { formatTokens } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -40,33 +40,34 @@ export default function AnalyticsPage() {
   const modelData = models?.data || [];
   const providerData = providers?.data || [];
 
-  const modelBarData = modelData.map((m: any) => ({
+  const modelBarData = modelData.map((m: { model: string; tokens: number }) => ({
     name: m.model,
-    value: m.cost,
+    value: m.tokens,
   }));
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Cost Analytics</h1>
-
-      {/* Period Comparison */}
+      <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
+      <p className="text-sm text-gray-500 -mt-4">
+        This page now focuses on usage volume only: requests, tokens, models, and providers.
+      </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4">
-          <Text>7-Day Cost</Text>
+          <Text>7-Day Requests</Text>
           <Metric className="mt-1">
-            {weekStats ? formatCost(weekStats.total_cost_usd) : "—"}
+            {weekStats ? String(weekStats.total_requests) : "—"}
           </Metric>
           <Text className="text-xs text-gray-500 mt-1">
-            {weekStats ? `${weekStats.total_requests} requests` : ""}
+            {weekStats ? `${formatTokens(weekStats.total_tokens)} tokens` : ""}
           </Text>
         </Card>
         <Card className="p-4">
-          <Text>30-Day Cost</Text>
+          <Text>30-Day Requests</Text>
           <Metric className="mt-1">
-            {monthStats ? formatCost(monthStats.total_cost_usd) : "—"}
+            {monthStats ? String(monthStats.total_requests) : "—"}
           </Metric>
           <Text className="text-xs text-gray-500 mt-1">
-            {monthStats ? `${monthStats.total_requests} requests` : ""}
+            {monthStats ? `${formatTokens(monthStats.total_tokens)} tokens` : ""}
           </Text>
         </Card>
         <Card className="p-4">
@@ -83,30 +84,28 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
-      {/* Daily Cost Trend */}
       <Card>
-        <Text className="font-semibold">Daily Cost Trend (30d)</Text>
+        <Text className="font-semibold">Daily Token Trend (30d)</Text>
         <AreaChart
           className="mt-4 h-64"
           data={timelineData}
           index="time"
-          categories={["cost"]}
-          colors={["emerald"]}
-          valueFormatter={(v: number) => formatCost(v)}
+          categories={["tokens"]}
+          colors={["blue"]}
+          valueFormatter={(v: number) => formatTokens(v)}
           showLegend={false}
           showAnimation
         />
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Cost by Model */}
         <Card>
-          <Text className="font-semibold">Cost by Model (30d)</Text>
+          <Text className="font-semibold">Tokens by Model (30d)</Text>
           {modelBarData.length > 0 ? (
             <BarList
               data={modelBarData}
               className="mt-4"
-              valueFormatter={(v: number) => formatCost(v)}
+              valueFormatter={(v: number) => formatTokens(v)}
             />
           ) : (
             <div className="mt-4 h-40 flex items-center justify-center text-gray-400 text-sm">
@@ -115,9 +114,8 @@ export default function AnalyticsPage() {
           )}
         </Card>
 
-        {/* Provider Distribution */}
         <Card>
-          <Text className="font-semibold">Provider Distribution (30d)</Text>
+          <Text className="font-semibold">Requests by Provider (30d)</Text>
           {providerData.length > 0 ? (
             <DonutChart
               className="mt-4 h-52"

@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from flowgate.db.engine import get_session, init_db
 from flowgate.db.models import VaultMeta
+from flowgate.security.master_key_store import save_master_key
 from flowgate.security.vault import Vault
 
 logger = logging.getLogger(__name__)
@@ -136,6 +137,7 @@ async def auth_setup(body: SetupRequest, request: Request):
             )
             session.add(meta)
             session.commit()
+            _persist_master_key(request, vault)
         finally:
             session.close()
     except HTTPException:
@@ -175,6 +177,7 @@ async def auth_verify(body: VerifyRequest, request: Request):
                 salt = base64.b64decode(meta.salt)
                 vault.initialize(body.password, salt=salt)
                 _load_encrypted_cache(vault, db_path)
+            _persist_master_key(request, vault)
         finally:
             session.close()
     except HTTPException:
@@ -200,3 +203,14 @@ def _load_encrypted_cache(vault: Vault, db_path: str) -> None:
         vault.load_encrypted_cache(keys)
     finally:
         session.close()
+
+
+def _persist_master_key(request: Request, vault: Vault) -> None:
+    """Persist Fernet key locally so restart auto-unlock does not require re-entry."""
+    settings = getattr(request.app.state, "settings", None)
+    if settings is None:
+        return
+    try:
+        save_master_key(settings, vault.export_key())
+    except Exception:
+        logger.warning("Failed to persist master key; restart will require manual unlock")

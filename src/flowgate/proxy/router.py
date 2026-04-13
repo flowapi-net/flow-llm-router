@@ -13,10 +13,13 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlmodel import select
 
 from flowgate.api.caller_tokens import validate_caller_token
+from flowgate.config import LoggingConfig, Settings
 from flowgate.db.engine import get_session
 from flowgate.db.models import ProviderKey, ProviderModel, RequestLog
 from flowgate.proxy.schemas import ChatCompletionRequest, EmbeddingRequest
 from flowgate.proxy.streaming import stream_completion
+from flowgate.security.redact import redact_secrets as _redact
+from flowgate.smart_router.service import SmartRouterService
 
 router = APIRouter()
 
@@ -48,6 +51,10 @@ def _infer_provider(model: str) -> str:
 
 def _get_db_path(request: Request) -> str:
     return getattr(request.app.state, "db_path", "./data.db")
+
+
+def _get_settings(request: Request) -> Settings:
+    return getattr(request.app.state, "settings", Settings())
 
 
 def _resolve_vault_info(request: Request, provider: str) -> tuple[str | None, str | None]:
@@ -152,6 +159,7 @@ def _add_if_not_none(kw: dict, body: Any, fields: list[str]) -> None:
 @router.post("/v1/chat/completions")
 async def chat_completions(body: ChatCompletionRequest, request: Request):
     db_path = _get_db_path(request)
+    settings = _get_settings(request)
 
     if not _check_caller_token(request, body.user, db_path):
         return JSONResponse(
@@ -159,14 +167,33 @@ async def chat_completions(body: ChatCompletionRequest, request: Request):
             content={"error": {"message": "Invalid or missing FlowGate access token", "type": "auth_error"}},
         )
 
-    provider = _infer_provider(body.model)
-    api_key, api_base = _resolve_vault_info(request, provider)
-    base = _build_litellm_kwargs(body.model, api_key, api_base, vault_provider=provider)
+    # Smart Router: evaluate complexity, potentially reroute to a different model
+    service: SmartRouterService | None = getattr(request.app.state, "smart_router_service", None)
+    messages_list = [m.model_dump(exclude_none=True) for m in body.messages]
+    if service:
+        routing = service.route(messages_list, body.model)
+    else:
+        from flowgate.smart_router.complexity import RoutingResult
+        routing = RoutingResult(model=body.model, tier="DIRECT", score=0.0, original_model=body.model)
 
+    provider = _infer_provider(routing.model)
+    api_key, api_base = _resolve_vault_info(request, provider)
+    base = _build_litellm_kwargs(routing.model, api_key, api_base, vault_provider=provider)
+
+    is_routed = routing.tier != "DIRECT"
     if body.stream:
         kw = _chat_litellm_kwargs(body, base)
         return StreamingResponse(
-            stream_completion(litellm_kwargs=kw, request=body, db_path=db_path, provider=provider),
+            stream_completion(
+                litellm_kwargs=kw,
+                request=body,
+                db_path=db_path,
+                provider=provider,
+                log_config=settings.logging,
+                model_requested=body.model,
+                complexity_score=routing.score if is_routed else None,
+                complexity_tier=routing.tier if is_routed else None,
+            ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
         )
@@ -176,7 +203,7 @@ async def chat_completions(body: ChatCompletionRequest, request: Request):
 
     status, error_msg, response_content = "success", None, ""
     prompt_tokens = completion_tokens = total_tokens = 0
-    cost = 0.0
+    cost_usd = 0.0
     model_used = base["model"]
 
     try:
@@ -188,20 +215,33 @@ async def chat_completions(body: ChatCompletionRequest, request: Request):
             completion_tokens = response.usage.completion_tokens or 0
             total_tokens = response.usage.total_tokens or 0
         if hasattr(response, "_hidden_params"):
-            cost = response._hidden_params.get("response_cost", 0) or 0
             if not provider:
                 provider = response._hidden_params.get("custom_llm_provider", "")
+            cost_usd = float(response._hidden_params.get("response_cost") or 0.0)
         model_used = getattr(response, "model", model_used) or model_used
         response_data = response.model_dump()
     except Exception as e:
         status, error_msg = "error", str(e)
         latency_ms = int((time.monotonic() - start) * 1000)
-        _save_chat_log(body, model_used, provider, "", status, error_msg, 0, 0, 0, 0.0, latency_ms, db_path)
+        _save_chat_log(
+            body, model_used, provider, "", status, error_msg,
+            0, 0, 0, latency_ms, 0.0, db_path,
+            log_config=settings.logging,
+            model_requested=body.model,
+            complexity_score=routing.score if is_routed else None,
+            complexity_tier=routing.tier if is_routed else None,
+        )
         return JSONResponse(status_code=500, content={"error": {"message": str(e), "type": type(e).__name__}})
 
     latency_ms = int((time.monotonic() - start) * 1000)
-    _save_chat_log(body, model_used, provider, response_content, status, error_msg,
-                   prompt_tokens, completion_tokens, total_tokens, cost, latency_ms, db_path)
+    _save_chat_log(
+        body, model_used, provider, response_content, status, error_msg,
+        prompt_tokens, completion_tokens, total_tokens, latency_ms, cost_usd, db_path,
+        log_config=settings.logging,
+        model_requested=body.model,
+        complexity_score=routing.score if is_routed else None,
+        complexity_tier=routing.tier if is_routed else None,
+    )
     return JSONResponse(content=response_data)
 
 
@@ -312,20 +352,51 @@ def _save_chat_log(
     model_used: str, provider: str, response_content: str,
     status: str, error_message: str | None,
     prompt_tokens: int, completion_tokens: int, total_tokens: int,
-    cost_usd: float, latency_ms: int, db_path: str,
+    latency_ms: int, cost_usd: float, db_path: str,
+    *,
+    log_config: LoggingConfig | None = None,
+    model_requested: str | None = None,
+    complexity_score: float | None = None,
+    complexity_tier: str | None = None,
 ) -> None:
-    messages_json = json.dumps(
-        [m.model_dump(exclude_none=True) for m in request.messages], ensure_ascii=False,
-    )
+    if log_config is None:
+        log_config = LoggingConfig()
+
+    messages_json: str
+    if log_config.log_prompts:
+        raw = json.dumps(
+            [m.model_dump(exclude_none=True) for m in request.messages], ensure_ascii=False,
+        )
+        messages_json = _redact(raw) if log_config.redact_secrets else raw
+    else:
+        messages_json = "[redacted]"
+
+    stored_response: str | None
+    if log_config.log_responses and response_content:
+        stored_response = _redact(response_content) if log_config.redact_secrets else response_content
+    else:
+        stored_response = None if not log_config.log_responses else (response_content or None)
+
     log = RequestLog(
-        model_requested=request.model, model_used=model_used, provider=provider,
-        messages=messages_json, temperature=request.temperature,
-        max_tokens=request.max_tokens, stream=False,
-        response_content=response_content or None,
-        status=status, error_message=error_message,
-        prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
-        total_tokens=total_tokens, cost_usd=cost_usd, latency_ms=latency_ms,
-        session_id=request.session_id, user_tag=request.user_tag,
+        model_requested=model_requested or request.model,
+        model_used=model_used,
+        provider=provider,
+        messages=messages_json,
+        temperature=request.temperature,
+        max_tokens=request.max_tokens,
+        stream=False,
+        complexity_score=complexity_score,
+        complexity_tier=complexity_tier,
+        response_content=stored_response,
+        status=status,
+        error_message=error_message,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        cost_usd=cost_usd,
+        latency_ms=latency_ms,
+        session_id=request.session_id,
+        user_tag=request.user_tag,
     )
     session = get_session(db_path)
     try:

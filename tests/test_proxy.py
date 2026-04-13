@@ -33,7 +33,7 @@ def _make_litellm_response(
     response.usage.completion_tokens = completion_tokens
     response.usage.total_tokens = prompt_tokens + completion_tokens
     response.model = model
-    response._hidden_params = {"response_cost": 0.0003, "custom_llm_provider": "openai"}
+    response._hidden_params = {"custom_llm_provider": "openai"}
     response.model_dump.return_value = {
         "id": "chatcmpl-test",
         "object": "chat.completion",
@@ -68,7 +68,7 @@ async def _stream_chunks(content: str = "Hello!"):
     final = MagicMock()
     final.choices = []
     final.usage = MagicMock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
-    final._hidden_params = {"response_cost": 0.0003, "custom_llm_provider": "openai"}
+    final._hidden_params = {"custom_llm_provider": "openai"}
     final.model = "gpt-4o"
     final.model_dump_json.return_value = json.dumps({"id": "chunk-final", "choices": []})
     yield final
@@ -320,3 +320,121 @@ class TestProviderInference:
     def test_infer_unknown(self):
         from flowgate.proxy.router import _infer_provider
         assert _infer_provider("unknown-model") == ""
+
+
+# ════════════════════════════════════════════════════════════════
+# Cost tracking (cost_usd)
+# ════════════════════════════════════════════════════════════════
+
+
+class TestCostTracking:
+    async def test_cost_usd_saved_non_stream(self, client, test_settings):
+        """cost_usd from LiteLLM _hidden_params is persisted to the DB."""
+        mock_response = _make_litellm_response("Hello")
+        mock_response._hidden_params = {
+            "custom_llm_provider": "openai",
+            "response_cost": 0.0042,
+        }
+
+        with patch("flowgate.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
+            resp = await client.post("/v1/chat/completions", json={
+                "model": "gpt-4o",
+                "messages": [{"role": "user", "content": "Hello"}],
+            })
+
+        assert resp.status_code == 200
+
+        session = get_session(test_settings.database.path)
+        try:
+            logs = session.exec(select(RequestLog)).all()
+            assert len(logs) == 1
+            assert abs(logs[0].cost_usd - 0.0042) < 1e-8
+        finally:
+            session.close()
+
+    async def test_cost_usd_zero_when_missing(self, client, test_settings):
+        """When _hidden_params has no response_cost, cost_usd defaults to 0."""
+        mock_response = _make_litellm_response("Hi")
+        mock_response._hidden_params = {}
+
+        with patch("flowgate.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
+            await client.post("/v1/chat/completions", json={
+                "model": "gpt-4o",
+                "messages": [{"role": "user", "content": "Hi"}],
+            })
+
+        session = get_session(test_settings.database.path)
+        try:
+            logs = session.exec(select(RequestLog)).all()
+            assert logs[0].cost_usd == 0.0
+        finally:
+            session.close()
+
+
+# ════════════════════════════════════════════════════════════════
+# Smart Router wiring (complexity_tier saved to DB)
+# ════════════════════════════════════════════════════════════════
+
+
+class TestSmartRouterWiring:
+    async def test_complexity_tier_direct_when_router_disabled(self, client, test_settings):
+        """When smart_router.enabled=False (default), tier is None in the log."""
+        mock_response = _make_litellm_response("ok")
+
+        with patch("flowgate.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
+            await client.post("/v1/chat/completions", json={
+                "model": "gpt-4o",
+                "messages": [{"role": "user", "content": "Hi"}],
+            })
+
+        session = get_session(test_settings.database.path)
+        try:
+            logs = session.exec(select(RequestLog)).all()
+            assert len(logs) == 1
+            # Router disabled → tier/score are not stored
+            assert logs[0].complexity_tier is None
+            assert logs[0].complexity_score is None
+        finally:
+            session.close()
+
+    async def test_model_requested_preserved(self, client, test_settings):
+        """model_requested in log should always be the original model from the client."""
+        mock_response = _make_litellm_response("ok")
+
+        with patch("flowgate.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
+            await client.post("/v1/chat/completions", json={
+                "model": "gpt-4o",
+                "messages": [{"role": "user", "content": "Hello"}],
+            })
+
+        session = get_session(test_settings.database.path)
+        try:
+            logs = session.exec(select(RequestLog)).all()
+            assert logs[0].model_requested == "gpt-4o"
+        finally:
+            session.close()
+
+
+# ════════════════════════════════════════════════════════════════
+# Log Redaction
+# ════════════════════════════════════════════════════════════════
+
+
+class TestLogRedaction:
+    async def test_api_key_in_message_is_redacted(self, client, test_settings):
+        """API key patterns in message content must be redacted in the stored log."""
+        mock_response = _make_litellm_response("Done")
+
+        with patch("flowgate.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
+            await client.post("/v1/chat/completions", json={
+                "model": "gpt-4o",
+                "messages": [{"role": "user", "content": "My key is sk-abcdefghijklmnopqrstuvwx"}],
+            })
+
+        session = get_session(test_settings.database.path)
+        try:
+            logs = session.exec(select(RequestLog)).all()
+            assert "sk-abcdefghijklmnopqrstuvwx" not in logs[0].messages
+            assert "REDACTED" in logs[0].messages or "****" in logs[0].messages
+        finally:
+            session.close()

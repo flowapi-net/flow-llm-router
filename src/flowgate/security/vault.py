@@ -40,6 +40,7 @@ class Vault:
     def __init__(self) -> None:
         self._fernet: Fernet | None = None
         self._encrypted_cache: dict[str, str] = {}
+        self._fernet_key: str | None = None
 
     @property
     def is_initialized(self) -> bool:
@@ -59,9 +60,26 @@ class Vault:
             salt=salt,
             iterations=_PBKDF2_ITERATIONS,
         )
-        key = base64.urlsafe_b64encode(kdf.derive(master_password.encode()))
-        self._fernet = Fernet(key)
+        key = base64.urlsafe_b64encode(kdf.derive(master_password.encode())).decode()
+        self.initialize_from_key(key)
         return salt
+
+    def initialize_from_key(self, fernet_key: str) -> None:
+        """Initialize vault directly from a persisted Fernet key."""
+        self._fernet = Fernet(fernet_key.encode())
+        self._fernet_key = fernet_key
+
+    def export_key(self) -> str:
+        """Return the current Fernet key for auto-unlock persistence."""
+        if self._fernet_key is None:
+            raise VaultNotInitializedError("Vault has not been initialized with a master password")
+        return self._fernet_key
+
+    def lock(self) -> None:
+        """Wipe key material and encrypted cache from runtime memory."""
+        self._fernet = None
+        self._fernet_key = None
+        self._encrypted_cache = {}
 
     def _require_init(self) -> Fernet:
         if self._fernet is None:

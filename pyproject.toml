@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "flow-llm-router"
 version = "0.1.0"
-description = "Local-first LLM gateway with cost audit dashboard for AI developers"
+description = "Local-first LLM gateway with token usage analytics for AI developers"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [{ name = "FlowGate Team" }]
-keywords = ["llm", "gateway", "proxy", "ai", "cost-tracking"]
+keywords = ["llm", "gateway", "proxy", "ai", "token-usage"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Framework :: FastAPI",
@@ -31,6 +31,7 @@ dependencies = [
 
 [project.optional-dependencies]
 skills = ["chromadb>=0.5"]
+classifier = ["routellm[serve]"]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.4"]
 
 [project.scripts]
