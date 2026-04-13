@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="flowapi_logo.png" alt="nanobot" width="500">
+  <img src="flowapi_logo.png" alt="FlowAPI" width="500">
   <h1>🚀 Flow-LLM-Router: The Ultimate "Token Saver"</h1>
   <p>
       <a href="https://pypi.org/project/flow-llm-router/"><img src="https://img.shields.io/pypi/v/flow-llm-router" alt="PyPI"></a>
