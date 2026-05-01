@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from typing import List, Optional
 
 import httpx
+import litellm
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlmodel import select
@@ -66,6 +68,15 @@ class UpdateModelBody(BaseModel):
     enabled: Optional[bool] = None
 
 
+class TestModelResult(BaseModel):
+    ok: bool
+    provider: str
+    model_id: str
+    latency_ms: int
+    message: str
+    response_preview: Optional[str] = None
+
+
 # ─── Helpers ───
 
 async def _fetch_models_from_provider(
@@ -104,6 +115,61 @@ def default_base_url_for_provider(provider: str) -> str:
         "siliconflow": "https://api.siliconflow.cn/v1",
     }
     return mapping.get(provider.lower(), "")
+
+
+def _base_url_from_extra_config(pk: ProviderKey) -> str:
+    base_url = ""
+    if pk.extra_config:
+        try:
+            cfg = json.loads(pk.extra_config)
+            base_url = (cfg.get("base_url") or "").strip()
+        except Exception:
+            pass
+    return base_url
+
+
+def _base_url_from_key(provider: str, pk: ProviderKey) -> str:
+    return _base_url_from_extra_config(pk) or default_base_url_for_provider(provider)
+
+
+def _base_url_for_model_test(provider: str, pk: ProviderKey) -> str:
+    configured = _base_url_from_extra_config(pk)
+    if configured:
+        return configured
+    if provider.lower() == "anthropic":
+        return ""
+    return default_base_url_for_provider(provider)
+
+
+def _model_test_litellm_kwargs(row: ProviderModel, api_key: str, base_url: str) -> dict:
+    kwargs: dict = {
+        "api_key": api_key,
+        "messages": [
+            {"role": "system", "content": "You are a connectivity test endpoint."},
+            {"role": "user", "content": "Reply with exactly OK."},
+        ],
+        "temperature": 0,
+        "max_tokens": 8,
+    }
+    if base_url:
+        upstream = row.model_id
+        if upstream.lower().startswith(row.provider.lower() + "/"):
+            upstream = upstream[len(row.provider) + 1 :]
+        kwargs["model"] = f"openai/{upstream}"
+        kwargs["api_base"] = base_url
+        kwargs["allowed_openai_params"] = ["reasoning_effort"]
+    else:
+        kwargs["model"] = row.model_id
+    return kwargs
+
+
+def _preview_from_litellm_response(response) -> str:
+    try:
+        if response.choices:
+            return (response.choices[0].message.content or "").strip()
+    except Exception:
+        pass
+    return ""
 
 
 def to_model_item(row: ProviderModel) -> ModelItem:
@@ -238,6 +304,67 @@ async def update_model(
         session.close()
 
 
+@router.post("/{model_id}/test", response_model=TestModelResult)
+async def test_model(
+    model_id: str,
+    request: Request,
+    _: bool = Depends(verify_auth_token),
+):
+    """Send a tiny chat completion request to verify a catalog model can answer."""
+    db_path = _get_db_path(request)
+    vault = _get_vault(request)
+    if not vault.is_initialized:
+        raise HTTPException(status_code=423, detail="Vault is locked. Verify master password first.")
+
+    session = get_session(db_path)
+    try:
+        row = session.get(ProviderModel, model_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Model not found")
+
+        pk = session.exec(
+            select(ProviderKey).where(
+                ProviderKey.provider == row.provider,
+                ProviderKey.enabled == True,  # noqa: E712
+            )
+        ).first()
+        if pk is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No enabled provider key for '{row.provider}'.",
+            )
+        provider = row.provider
+        upstream_model = row.model_id
+        api_key = vault.decrypt_key(pk.encrypted_key)
+        base_url = _base_url_for_model_test(provider, pk)
+    finally:
+        session.close()
+
+    kwargs = _model_test_litellm_kwargs(row, api_key, base_url)
+    start = time.monotonic()
+    try:
+        response = await litellm.acompletion(**kwargs)
+        latency_ms = int((time.monotonic() - start) * 1000)
+        preview = _preview_from_litellm_response(response)
+        return TestModelResult(
+            ok=True,
+            provider=provider,
+            model_id=upstream_model,
+            latency_ms=latency_ms,
+            message="OK",
+            response_preview=preview[:200] if preview else None,
+        )
+    except Exception as exc:
+        latency_ms = int((time.monotonic() - start) * 1000)
+        return TestModelResult(
+            ok=False,
+            provider=provider,
+            model_id=upstream_model,
+            latency_ms=latency_ms,
+            message=str(exc)[:500],
+        )
+
+
 @router.post("/sync/{provider_name}", response_model=SyncResult)
 async def sync_models(
     provider_name: str,
@@ -268,15 +395,7 @@ async def sync_models(
         api_key = vault.decrypt_key(pk.encrypted_key)
 
         # Resolve base URL: extra_config > known defaults
-        base_url = ""
-        if pk.extra_config:
-            try:
-                cfg = json.loads(pk.extra_config)
-                base_url = cfg.get("base_url", "")
-            except Exception:
-                pass
-        if not base_url:
-            base_url = default_base_url_for_provider(provider_name)
+        base_url = _base_url_from_key(provider_name, pk)
         if not base_url:
             raise HTTPException(
                 status_code=422,

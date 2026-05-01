@@ -2,12 +2,34 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pytest
 
 from flow_llm_router.db.engine import get_session
 from flow_llm_router.db.models import ProviderModel, RequestLog
+
+
+class _FakeMessage:
+    content = "OK"
+
+
+class _FakeChoice:
+    message = _FakeMessage()
+
+
+class _FakeUsage:
+    prompt_tokens = 1
+    completion_tokens = 1
+    total_tokens = 2
+
+
+class _FakeLLMResponse:
+    choices = [_FakeChoice()]
+    usage = _FakeUsage()
+    model = "openai/gpt-test"
 
 
 # ════════════════════════════════════════════════════════════════
@@ -353,6 +375,57 @@ class TestModelsAPI:
         rows = list_resp.json()
         toggled = next(item for item in rows if item["id"] == model_id)
         assert toggled["enabled"] is False
+
+    async def test_test_model_uses_provider_key_and_base_url(self, authed_client, test_settings):
+        await authed_client.post(
+            "/api/keys",
+            json={
+                "provider": "openai",
+                "key_name": "openai-default",
+                "api_key": "sk-test-model-key",
+                "extra_config": json.dumps({"base_url": "https://example.test/v1"}),
+            },
+        )
+        session = get_session(test_settings.database.path)
+        try:
+            row = ProviderModel(provider="openai", model_id="gpt-test", enabled=False)
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            model_id = row.id
+        finally:
+            session.close()
+
+        captured = {}
+
+        async def fake_completion(**kwargs):
+            captured.update(kwargs)
+            return _FakeLLMResponse()
+
+        with patch("flow_llm_router.api.models.litellm.acompletion", new=fake_completion):
+            resp = await authed_client.post(f"/api/models/{model_id}/test")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["response_preview"] == "OK"
+        assert captured["api_key"] == "sk-test-model-key"
+        assert captured["api_base"] == "https://example.test/v1"
+        assert captured["model"] == "openai/gpt-test"
+
+    async def test_test_model_requires_auth(self, client, test_settings):
+        session = get_session(test_settings.database.path)
+        try:
+            row = ProviderModel(provider="openai", model_id="gpt-test")
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            model_id = row.id
+        finally:
+            session.close()
+
+        resp = await client.post(f"/api/models/{model_id}/test")
+        assert resp.status_code == 401
 
 
 class TestLogs:

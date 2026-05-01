@@ -98,6 +98,13 @@ interface ModelItem {
   synced_at: string;
 }
 
+interface TestModelResult {
+  ok: boolean;
+  latency_ms: number;
+  message: string;
+  response_preview: string | null;
+}
+
 export default function ModelsPage() {
   const [models, setModels] = useState<ModelItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,6 +120,8 @@ export default function ModelsPage() {
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState("");
   const [savingModelId, setSavingModelId] = useState<string | null>(null);
+  const [testingModelId, setTestingModelId] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, TestModelResult>>({});
   const [showReAuth, setShowReAuth] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
@@ -245,6 +254,37 @@ export default function ModelsPage() {
       }
     } finally {
       setSavingModelId(null);
+    }
+  };
+
+  const testModel = async (model: ModelItem) => {
+    setTestingModelId(model.id);
+    setTestResults((prev) => {
+      const next = { ...prev };
+      delete next[model.id];
+      return next;
+    });
+    try {
+      const result = await fetchAPI<TestModelResult>(`/models/${model.id}/test`, {
+        method: "POST",
+      });
+      setTestResults((prev) => ({ ...prev, [model.id]: result }));
+    } catch (e: any) {
+      if (e instanceof AuthExpiredError) {
+        requireAuth(() => { void testModel(model); });
+      } else {
+        setTestResults((prev) => ({
+          ...prev,
+          [model.id]: {
+            ok: false,
+            latency_ms: 0,
+            message: e.message || "测试失败",
+            response_preview: null,
+          },
+        }));
+      }
+    } finally {
+      setTestingModelId(null);
     }
   };
 
@@ -449,6 +489,12 @@ export default function ModelsPage() {
               <div className="divide-y divide-gray-50">
                 {items.map((m) => {
                   const fullName = `${m.provider}/${m.model_id}`;
+                  const testResult = testResults[m.id];
+                  const testLabel = testResult
+                    ? testResult.ok
+                      ? `OK ${testResult.latency_ms}ms${testResult.response_preview ? ` · ${testResult.response_preview}` : ""}`
+                      : `Failed ${testResult.latency_ms}ms · ${testResult.message}`
+                    : "";
                   return (
                   <div
                     key={m.id}
@@ -466,7 +512,25 @@ export default function ModelsPage() {
                         {m.enabled ? "Enabled" : "Disabled"}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                      {testResult && (
+                        <span
+                          title={testLabel}
+                          className={`max-w-[260px] truncate text-xs ${
+                            testResult.ok ? "text-green-600" : "text-red-500"
+                          }`}
+                        >
+                          {testLabel}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        disabled={testingModelId === m.id}
+                        onClick={() => testModel(m)}
+                        className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                      >
+                        {testingModelId === m.id ? "Testing…" : "Test"}
+                      </button>
                       <button
                         type="button"
                         disabled={savingModelId === m.id}
