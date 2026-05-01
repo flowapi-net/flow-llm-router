@@ -7,8 +7,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from flowgate.analytics.budget_doctor import BudgetDoctor
-from flowgate.db.models import RequestLog
+from flow_llm_router.analytics.budget_doctor import BudgetDoctor
+from flow_llm_router.db.models import RequestLog
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FlowGate 服务集成测试脚本
+Flow LLM Router 服务集成测试脚本
 
 用法:
   python scripts/test_service.py                         # 全部测试（需要已配置 Provider）
@@ -227,7 +227,7 @@ def test_embeddings(client: httpx.Client, base: str, token: str, embed_model: st
         return
 
     headers = {"Authorization": f"Bearer {token}"} if token else {}
-    payload = {"model": embed_model, "input": ["Hello, FlowGate!", "测试向量化"]}
+    payload = {"model": embed_model, "input": ["Hello, Flow LLM Router!", "测试向量化"]}
 
     try:
         r = client.post(f"{base}/v1/embeddings", json=payload, headers=headers, timeout=30)
@@ -292,9 +292,9 @@ def test_logs(client: httpx.Client, base: str) -> None:
 # ─── Entry point ─────────────────────────────────────────────────────────────
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="FlowGate 服务集成测试")
-    parser.add_argument("--base",        default="http://127.0.0.1:7798", help="FlowGate 服务地址")
-    parser.add_argument("--token",       default="",                       help="FlowGate Access Token（可选）")
+    parser = argparse.ArgumentParser(description="Flow LLM Router 服务集成测试")
+    parser.add_argument("--base",        default="http://127.0.0.1:7798", help="Flow LLM Router 服务地址")
+    parser.add_argument("--token",       default="",                       help="Flow LLM Router Access Token（可选）")
     parser.add_argument("--model",       default="gpt-4o-mini",            help="用于 chat 测试的模型 ID")
     parser.add_argument("--embed-model", default="",                       help="用于 embedding 测试的模型 ID")
     parser.add_argument("--suite",       default="all",
@@ -302,7 +302,7 @@ def main() -> None:
                         help="只运行指定测试组")
     args = parser.parse_args()
 
-    print(f"\n{BOLD}FlowGate 集成测试{RESET}")
+    print(f"\n{BOLD}Flow LLM Router 集成测试{RESET}")
     print(f"  服务地址: {CYAN}{args.base}{RESET}")
     print(f"  模型:     {CYAN}{args.model}{RESET}")
     print(f"  Token:    {CYAN}{args.token[:12] + '…' if args.token else '（未指定，开放模式）'}{RESET}")

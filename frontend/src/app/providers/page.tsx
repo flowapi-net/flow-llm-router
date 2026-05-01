@@ -203,7 +203,7 @@ function buildSnippets(base: string) {
 
 client = OpenAI(
     base_url="${b}",
-    api_key="any",          # FlowGate 管密钥，这里随便填
+    api_key="any",          # Flow LLM Router 管密钥，这里随便填
 )
 
 resp = client.chat.completions.create(
@@ -215,7 +215,7 @@ print(resp.choices[0].message.content)`,
 
 const client = new OpenAI({
   baseURL: "${b}",
-  apiKey: "any",            // FlowGate 管密钥，这里随便填
+  apiKey: "any",            // Flow LLM Router 管密钥，这里随便填
   dangerouslyAllowBrowser: true,
 });
 
@@ -259,7 +259,7 @@ function IntegrationGuide() {
       >
         <div className="flex items-center gap-2.5">
           <span className="text-blue-600 text-base">⚡</span>
-          <span className="text-sm font-semibold text-blue-800">如何接入 FlowGate 代理</span>
+          <span className="text-sm font-semibold text-blue-800">如何接入 Flow LLM Router 代理</span>
           <span className="font-mono text-xs bg-white border border-blue-200 text-blue-700 px-2 py-0.5 rounded">
             POST {base}/v1/chat/completions
           </span>
@@ -272,7 +272,7 @@ function IntegrationGuide() {
           <p className="text-xs text-blue-700">
             将你代码中的 <code className="bg-white px-1 py-0.5 rounded border border-blue-200">base_url</code> 改成
             {" "}<code className="bg-white px-1 py-0.5 rounded border border-blue-200">{base}/v1</code>，
-            <code className="bg-white px-1 py-0.5 rounded border border-blue-200">api_key</code> 随便填（FlowGate 统一管理密钥）。
+            <code className="bg-white px-1 py-0.5 rounded border border-blue-200">api_key</code> 随便填（Flow LLM Router 统一管理密钥）。
             所有请求会自动路由到下方配置的 Provider。
           </p>
 

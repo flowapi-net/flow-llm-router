@@ -4,7 +4,7 @@ import VaultGate from "@/components/VaultGate";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FlowGate Dashboard",
+  title: "Flow LLM Router Dashboard",
   description: "Local-first LLM gateway with token usage analytics",
 };
 
@@ -29,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div className="flex items-center justify-between h-14">
                 <div className="flex items-center gap-1">
                   <Link href="/" className="text-white font-bold text-lg tracking-tight mr-6">
-                    ⚡ FlowGate
+                    ⚡ Flow LLM Router
                   </Link>
                   <NavLink href="/">Dashboard</NavLink>
                   <NavLink href="/logs/">Logs</NavLink>

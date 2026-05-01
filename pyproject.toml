@@ -9,7 +9,7 @@ description = "Local-first LLM gateway with token usage analytics for AI develop
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-authors = [{ name = "FlowGate Team" }]
+authors = [{ name = "Flow LLM Router Team" }]
 keywords = ["llm", "gateway", "proxy", "ai", "token-usage"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -35,14 +35,14 @@ classifier = ["routellm[serve]"]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.4"]
 
 [project.scripts]
-flow-router = "flowgate.cli:app"
+flow-router = "flow_llm_router.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/flowapi-net/flow-llm-router"
 Documentation = "https://github.com/flowapi-net/flow-llm-router#readme"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/flowgate"]
+packages = ["src/flow_llm_router"]
 
 [tool.ruff]
 line-length = 100

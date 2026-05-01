@@ -139,7 +139,7 @@ client = OpenAI(
     api_key="${tok}",
 )
 
-# stream=True 即可开启流式输出，FlowGate 直接透传 SSE
+# stream=True 即可开启流式输出，Flow LLM Router 直接透传 SSE
 with client.chat.completions.create(
     model="gpt-4o-mini",
     messages=[{"role": "user", "content": "Hello!"}],
@@ -262,8 +262,8 @@ export default function IntegratePage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">接入指南</h1>
         <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-          FlowGate 完全兼容 OpenAI 接口协议。你的代码<strong className="text-gray-700">只需修改 base_url</strong>，
-          无需改动任何业务逻辑——FlowGate 在后端用 LiteLLM 自动路由到对应 Provider。
+          Flow LLM Router 完全兼容 OpenAI 接口协议。你的代码<strong className="text-gray-700">只需修改 base_url</strong>，
+          无需改动任何业务逻辑——Flow LLM Router 在后端用 LiteLLM 自动路由到对应 Provider。
         </p>
       </div>
 
@@ -282,7 +282,7 @@ export default function IntegratePage() {
           <div className="flex items-center gap-2 bg-indigo-600 rounded-lg px-3 py-2 text-white">
             <span className="text-base">⚡</span>
             <div>
-              <p className="font-semibold">FlowGate</p>
+              <p className="font-semibold">Flow LLM Router</p>
               <p className="text-indigo-200">鉴权 · 日志 · 路由</p>
             </div>
           </div>
@@ -296,7 +296,7 @@ export default function IntegratePage() {
           </div>
         </div>
         <p className="text-xs text-indigo-700">
-          你传入的 <InlineCode>api_key</InlineCode> 是 <strong>FlowGate Access Token</strong>（下面创建），
+          你传入的 <InlineCode>api_key</InlineCode> 是 <strong>Flow LLM Router Access Token</strong>（下面创建），
           真实的 Provider API Key 保存在 Vault 里，你的代码永远不会接触到它。
         </p>
       </section>
@@ -314,7 +314,7 @@ export default function IntegratePage() {
           <p className="ml-8.5 text-xs text-gray-500">
             前往 <a href="/providers" className="text-indigo-600 hover:underline">Providers</a> 页面，
             填写 Provider 名称（如 <InlineCode>openai</InlineCode>、<InlineCode>siliconflow</InlineCode>）、
-            Base URL（可选）和 API Key。FlowGate 会加密保存，代理时自动取用。
+            Base URL（可选）和 API Key。Flow LLM Router 会加密保存，代理时自动取用。
           </p>
         </div>
 
@@ -334,7 +334,7 @@ export default function IntegratePage() {
         <div className="space-y-3">
           <div className="flex items-center gap-2.5">
             <StepBadge n={3} />
-            <h3 className="text-sm font-semibold text-gray-800">把 base_url 改成 FlowGate 地址，其他代码不动</h3>
+            <h3 className="text-sm font-semibold text-gray-800">把 base_url 改成 Flow LLM Router 地址，其他代码不动</h3>
           </div>
           <div className="ml-8.5 space-y-3">
             {/* Base URL pill */}
@@ -367,7 +367,7 @@ export default function IntegratePage() {
             {mode === "流式 (Stream)" && (
               <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-xs text-blue-700">
                 <span className="shrink-0 mt-0.5">ℹ️</span>
-                <span>FlowGate 直接透传 Server-Sent Events（SSE），流式输出与直连 Provider 行为完全一致，无额外延迟。</span>
+                <span>Flow LLM Router 直接透传 Server-Sent Events（SSE），流式输出与直连 Provider 行为完全一致，无额外延迟。</span>
               </div>
             )}
             <CodeBlock code={allSnippets[mode][lang]} />
@@ -528,7 +528,7 @@ export default function IntegratePage() {
                 如何修改 IP 白名单？
               </summary>
               <div className="mt-2 space-y-1.5">
-                <p className="text-gray-500">编辑 <InlineCode>flowgate.yaml</InlineCode> 后重启服务：</p>
+                <p className="text-gray-500">编辑 <InlineCode>flow_llm_router.yaml</InlineCode> 后重启服务：</p>
                 <CodeBlock code={`security:
   ip_whitelist:
     enabled: true

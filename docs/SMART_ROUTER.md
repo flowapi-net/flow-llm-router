@@ -1,8 +1,8 @@
 # Smart Router
 
-FlowGate's smart router is a **local routing policy layer** that decides which model should actually serve a request before the proxy forwards it upstream.
+Flow LLM Router's smart router is a **local routing policy layer** that decides which model should actually serve a request before the proxy forwards it upstream.
 
-It does not replace LiteLLM or build a new inference backend. Instead, it adds an operator-controlled decision layer on top of FlowGate's OpenAI-compatible proxy.
+It does not replace LiteLLM or build a new inference backend. Instead, it adds an operator-controlled decision layer on top of Flow LLM Router's OpenAI-compatible proxy.
 
 ## Design Goals
 
@@ -75,14 +75,14 @@ Characteristics:
 
 - uses RouteLLM routers such as `bert`, `mf`, `sw_ranking`, or `causal_llm`
 - scores a prompt with `calculate_strong_win_rate()`
-- maps the resulting score back into the same four FlowGate tiers
+- maps the resulting score back into the same four Flow LLM Router tiers
 - reuses the same `tiers` mapping as the rule-based strategy
 
 Important behavior:
 
-- if RouteLLM is not installed, FlowGate falls back to `complexity`
-- if classifier routing fails at runtime, FlowGate falls back to `complexity`
-- classifier routing in FlowGate is **not** exposed as separate strong/weak model fields in the UI API; it still routes through `SIMPLE`, `MEDIUM`, `COMPLEX`, and `REASONING`
+- if RouteLLM is not installed, Flow LLM Router falls back to `complexity`
+- if classifier routing fails at runtime, Flow LLM Router falls back to `complexity`
+- classifier routing in Flow LLM Router is **not** exposed as separate strong/weak model fields in the UI API; it still routes through `SIMPLE`, `MEDIUM`, `COMPLEX`, and `REASONING`
 
 ## Complexity Strategy
 
@@ -108,13 +108,13 @@ Scoring properties:
 
 ## Classifier Strategy
 
-FlowGate wraps RouteLLM behind `SmartRouterService`.
+Flow LLM Router wraps RouteLLM behind `SmartRouterService`.
 
 Classifier flow:
 
 1. Concatenate non-system prompt text into a single routing string.
 2. Call the selected RouteLLM router's `calculate_strong_win_rate()`.
-3. Map the score into FlowGate's four tiers using `classifier_tier_boundaries`.
+3. Map the score into Flow LLM Router's four tiers using `classifier_tier_boundaries`.
 4. Resolve the final target model from the shared `tiers` mapping.
 
 ### Supported classifier types
@@ -128,10 +128,10 @@ The code currently accepts RouteLLM router names such as:
 
 ### MF embedding behavior
 
-The `mf` router may require OpenAI-compatible embedding access. FlowGate supports this in two ways:
+The `mf` router may require OpenAI-compatible embedding access. Flow LLM Router supports this in two ways:
 
 - via YAML fields such as `mf_embedding_base_url` and `mf_embedding_api_key`
-- via model-catalog-derived credentials applied from the FlowGate vault
+- via model-catalog-derived credentials applied from the Flow LLM Router vault
 
 The dashboard API intentionally does **not** persist embedding API secrets from the client payload. Secrets must come from server-side configuration or the provider vault.
 
@@ -212,10 +212,10 @@ smart_router:
 
 ## Config Source of Truth
 
-At startup, FlowGate loads router settings in this order:
+At startup, Flow LLM Router loads router settings in this order:
 
 1. `router_config` row in SQLite if a saved dashboard config exists
-2. `smart_router` from `flowgate.yaml`
+2. `smart_router` from `flow_llm_router.yaml`
 3. built-in defaults
 
 This means dashboard edits override YAML on subsequent runs.
@@ -389,7 +389,7 @@ Even classifier-based routing uses the same `complexity_score` and `complexity_t
 
 ## Failure and Fallback Rules
 
-FlowGate favors continuity over strict classifier correctness:
+Flow LLM Router favors continuity over strict classifier correctness:
 
 - missing RouteLLM package -> fall back to `complexity`
 - classifier initialization error -> fall back to `complexity`

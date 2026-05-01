@@ -8,11 +8,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from flowgate.config import SecurityConfig, Settings
-from flowgate.security.ip_guard import IPGuardMiddleware
-from flowgate.security.master_key_store import has_master_key, load_master_key, save_master_key
-from flowgate.security.redact import redact_headers, redact_secrets
-from flowgate.security.vault import (
+from flow_llm_router.config import SecurityConfig, Settings
+from flow_llm_router.security.ip_guard import IPGuardMiddleware
+from flow_llm_router.security.master_key_store import has_master_key, load_master_key, save_master_key
+from flow_llm_router.security.redact import redact_headers, redact_secrets
+from flow_llm_router.security.vault import (
     InvalidPasswordError,
     Vault,
     VaultError,

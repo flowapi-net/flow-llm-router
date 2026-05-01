@@ -1,10 +1,10 @@
 # Architecture
 
-This document describes how FlowGate is assembled at runtime and how requests move through the system.
+This document describes how Flow LLM Router is assembled at runtime and how requests move through the system.
 
 ## High-Level View
 
-FlowGate combines four concerns in one local service:
+Flow LLM Router combines four concerns in one local service:
 
 - an OpenAI-compatible proxy
 - an encrypted provider-key vault
@@ -33,7 +33,7 @@ Client SDK / Agent / Script
 
 ### FastAPI app
 
-`flowgate.app:create_app()` builds the service and is responsible for:
+`flow_llm_router.app:create_app()` builds the service and is responsible for:
 
 - loading settings
 - initializing the database
@@ -44,7 +44,7 @@ Client SDK / Agent / Script
 
 ### Proxy layer
 
-The proxy lives in `src/flowgate/proxy/router.py`.
+The proxy lives in `src/flow_llm_router/proxy/router.py`.
 
 It exposes:
 
@@ -86,7 +86,7 @@ The service is intentionally local and synchronous for the decision step.
 
 ### Dashboard
 
-The frontend is a Next.js application in `frontend/` that is statically exported and copied into `src/flowgate/static`.
+The frontend is a Next.js application in `frontend/` that is statically exported and copied into `src/flow_llm_router/static`.
 
 FastAPI serves:
 
@@ -100,7 +100,7 @@ The dashboard is not a separate runtime service in production packaging; it is s
 
 ### Chat completions
 
-For `POST /v1/chat/completions`, FlowGate executes the following path:
+For `POST /v1/chat/completions`, Flow LLM Router executes the following path:
 
 1. Read the caller token from `Authorization: Bearer ...` or the request body fallback.
 2. Validate access against `caller_tokens`.
@@ -111,11 +111,11 @@ For `POST /v1/chat/completions`, FlowGate executes the following path:
 7. Forward the request upstream.
 8. Persist request and response metadata to `request_logs`.
 
-For streaming requests, FlowGate forwards SSE chunks while still logging request metadata.
+For streaming requests, Flow LLM Router forwards SSE chunks while still logging request metadata.
 
 ### Embeddings
 
-For `POST /v1/embeddings`, FlowGate uses one of two paths:
+For `POST /v1/embeddings`, Flow LLM Router uses one of two paths:
 
 - standard LiteLLM embedding call
 - direct OpenAI-compatible JSON forwarding when a custom `api_base` is configured and LiteLLM provider inference would be unreliable
@@ -124,7 +124,7 @@ This avoids provider mismatches for some third-party OpenAI-compatible embedding
 
 ### Models
 
-For `GET /v1/models`, FlowGate returns:
+For `GET /v1/models`, Flow LLM Router returns:
 
 - synced provider models from `provider_models`, if available
 - otherwise a minimal default model list
@@ -139,7 +139,7 @@ Core SQLModel tables:
 | --- | --- |
 | `vault_meta` | Stores vault salt and password verification hash |
 | `provider_keys` | Stores encrypted provider keys and optional extra config such as custom base URL |
-| `caller_tokens` | Stores hashed access tokens for FlowGate callers |
+| `caller_tokens` | Stores hashed access tokens for Flow LLM Router callers |
 | `provider_models` | Stores model IDs discovered from provider `/models` endpoints |
 | `router_config` | Stores dashboard-managed smart-router configuration |
 | `request_logs` | Stores prompt, usage, latency, routing, and response metadata |
@@ -153,16 +153,16 @@ Provider selection follows simple model-name inference rules first, such as:
 - `gemini-*` -> `google`
 - `deepseek-*` -> `deepseek`
 
-If the model name contains a provider prefix like `provider/model-name`, FlowGate uses the prefix directly.
+If the model name contains a provider prefix like `provider/model-name`, Flow LLM Router uses the prefix directly.
 
-When a provider key includes `extra_config` with `base_url`, FlowGate forwards to that OpenAI-compatible endpoint instead of the provider default.
+When a provider key includes `extra_config` with `base_url`, Flow LLM Router forwards to that OpenAI-compatible endpoint instead of the provider default.
 
 ## Configuration Layers
 
-FlowGate configuration comes from three places:
+Flow LLM Router configuration comes from three places:
 
 1. built-in dataclass defaults
-2. `flowgate.yaml` or `flowgate.yml`
+2. `flow_llm_router.yaml` or `flow_llm_router.yml`
 3. in-memory state initialized from SQLite for router settings
 
 YAML supports `${ENV_VAR}` substitution for string values.
@@ -175,7 +175,7 @@ Smart-router config is special:
 
 ## Security Model
 
-FlowGate separates three security boundaries:
+Flow LLM Router separates three security boundaries:
 
 ### Caller authorization
 
@@ -198,7 +198,7 @@ IP filtering is enforced by middleware and supports:
 
 ## Frontend-to-Backend Contract
 
-The dashboard talks only to FlowGate's own REST API.
+The dashboard talks only to Flow LLM Router's own REST API.
 
 Main dashboard domains:
 
@@ -216,15 +216,15 @@ Because the frontend is a static export, most runtime behavior is implemented in
 
 The Python package includes:
 
-- backend code from `src/flowgate`
+- backend code from `src/flow_llm_router`
 - CLI entrypoint `flow-router`
-- static dashboard files copied into `src/flowgate/static`
+- static dashboard files copied into `src/flow_llm_router/static`
 
 The expected workflow is:
 
 1. build the frontend
 2. copy static output into the package
-3. run FlowGate as a single Python service
+3. run Flow LLM Router as a single Python service
 
 ## Extension Points
 

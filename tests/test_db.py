@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from flowgate.db.models import ProviderKey, RequestLog, VaultMeta
+from flow_llm_router.db.models import ProviderKey, RequestLog, VaultMeta
 
 
 # ════════════════════════════════════════════════════════════════

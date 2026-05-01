@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlmodel import select
 
-from flowgate.db.engine import get_session
-from flowgate.db.models import RequestLog
+from flow_llm_router.db.engine import get_session
+from flow_llm_router.db.models import RequestLog
 
 
 # ── LiteLLM Mock Factories ────────────────────────────────────────────────────
@@ -82,7 +82,7 @@ async def _stream_chunks(content: str = "Hello!"):
 class TestProxyNonStream:
     async def test_basic_completion(self, client):
         mock_response = _make_litellm_response("The answer is 42.")
-        with patch("flowgate.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
+        with patch("flow_llm_router.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
             resp = await client.post("/v1/chat/completions", json={
                 "model": "gpt-4o",
                 "messages": [{"role": "user", "content": "What is the answer?"}],
@@ -100,7 +100,7 @@ class TestProxyNonStream:
             captured.update(kwargs)
             return mock_response
 
-        with patch("flowgate.proxy.router.litellm.acompletion", new=capture_call):
+        with patch("flow_llm_router.proxy.router.litellm.acompletion", new=capture_call):
             await client.post("/v1/chat/completions", json={
                 "model": "gpt-4o",
                 "messages": [{"role": "user", "content": "hi"}],
@@ -113,7 +113,7 @@ class TestProxyNonStream:
 
     async def test_error_returns_500(self, client):
         with patch(
-            "flowgate.proxy.router.litellm.acompletion",
+            "flow_llm_router.proxy.router.litellm.acompletion",
             new=AsyncMock(side_effect=Exception("API Error")),
         ):
             resp = await client.post("/v1/chat/completions", json={
@@ -126,7 +126,7 @@ class TestProxyNonStream:
 
     async def test_logs_to_db_on_success(self, client, test_settings):
         mock_response = _make_litellm_response("Success response")
-        with patch("flowgate.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
+        with patch("flow_llm_router.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
             await client.post("/v1/chat/completions", json={
                 "model": "gpt-4o",
                 "messages": [{"role": "user", "content": "log me"}],
@@ -144,7 +144,7 @@ class TestProxyNonStream:
 
     async def test_logs_error_to_db(self, client, test_settings):
         with patch(
-            "flowgate.proxy.router.litellm.acompletion",
+            "flow_llm_router.proxy.router.litellm.acompletion",
             new=AsyncMock(side_effect=Exception("Timeout")),
         ):
             await client.post("/v1/chat/completions", json={
@@ -181,13 +181,49 @@ class TestProxyNonStream:
             headers={"Authorization": f"Bearer {token}"},
         )
 
-        with patch("flowgate.proxy.router.litellm.acompletion", new=capture_call):
+        with patch("flow_llm_router.proxy.router.litellm.acompletion", new=capture_call):
             await client.post("/v1/chat/completions", json={
                 "model": "gpt-4o",
                 "messages": [{"role": "user", "content": "hi"}],
             })
 
         assert captured.get("api_key") == "sk-testvaultkey123456"
+
+    async def test_custom_openai_provider_allows_reasoning_effort(self, client):
+        """Custom OpenAI-compatible providers may accept reasoning_effort even if LiteLLM cannot infer it."""
+        mock_response = _make_litellm_response(model="gpt-5.5")
+        captured = {}
+
+        async def capture_call(**kwargs):
+            captured.update(kwargs)
+            return mock_response
+
+        await client.post("/api/auth/setup", json={"password": "pass"})
+        verify_resp = await client.post("/api/auth/verify", json={"password": "pass"})
+        token = verify_resp.json()["token"]
+        await client.post(
+            "/api/keys",
+            json={
+                "provider": "openai",
+                "key_name": "Custom OpenAI",
+                "api_key": "sk-custom-openai-key123456",
+                "extra_config": json.dumps({"base_url": "https://rehdasu.cn"}),
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        with patch("flow_llm_router.proxy.router.litellm.acompletion", new=capture_call):
+            resp = await client.post("/v1/chat/completions", json={
+                "model": "gpt-5.5",
+                "messages": [{"role": "user", "content": "hi"}],
+                "reasoning_effort": "xhigh",
+            })
+
+        assert resp.status_code == 200
+        assert captured.get("model") == "openai/gpt-5.5"
+        assert captured.get("api_base") == "https://rehdasu.cn"
+        assert captured.get("reasoning_effort") == "xhigh"
+        assert "reasoning_effort" in captured.get("allowed_openai_params", [])
 
     async def test_no_api_key_when_vault_not_initialized(self, client):
         """When vault is not initialized, api_key should NOT be passed."""
@@ -198,7 +234,7 @@ class TestProxyNonStream:
             captured.update(kwargs)
             return mock_response
 
-        with patch("flowgate.proxy.router.litellm.acompletion", new=capture_call):
+        with patch("flow_llm_router.proxy.router.litellm.acompletion", new=capture_call):
             await client.post("/v1/chat/completions", json={
                 "model": "gpt-4o",
                 "messages": [{"role": "user", "content": "hi"}],
@@ -215,7 +251,7 @@ class TestProxyNonStream:
 class TestProxyStream:
     async def test_stream_returns_sse(self, client):
         with patch(
-            "flowgate.proxy.streaming.litellm.acompletion",
+            "flow_llm_router.proxy.streaming.litellm.acompletion",
             new=AsyncMock(return_value=_stream_chunks("Hello world")),
         ):
             resp = await client.post("/v1/chat/completions", json={
@@ -231,7 +267,7 @@ class TestProxyStream:
 
     async def test_stream_logs_to_db(self, client, test_settings):
         with patch(
-            "flowgate.proxy.streaming.litellm.acompletion",
+            "flow_llm_router.proxy.streaming.litellm.acompletion",
             new=AsyncMock(return_value=_stream_chunks("Streamed response")),
         ):
             await client.post("/v1/chat/completions", json={
@@ -265,7 +301,7 @@ class TestProxyStream:
             headers={"Authorization": f"Bearer {token}"},
         )
 
-        with patch("flowgate.proxy.streaming.litellm.acompletion", new=capture_call):
+        with patch("flow_llm_router.proxy.streaming.litellm.acompletion", new=capture_call):
             await client.post("/v1/chat/completions", json={
                 "model": "gpt-4o",
                 "messages": [{"role": "user", "content": "stream"}],
@@ -299,26 +335,26 @@ class TestModelsList:
 
 class TestProviderInference:
     def test_infer_openai(self):
-        from flowgate.proxy.router import _infer_provider
+        from flow_llm_router.proxy.router import _infer_provider
         assert _infer_provider("gpt-4o") == "openai"
         assert _infer_provider("gpt-4o-mini") == "openai"
         assert _infer_provider("o1-preview") == "openai"
 
     def test_infer_anthropic(self):
-        from flowgate.proxy.router import _infer_provider
+        from flow_llm_router.proxy.router import _infer_provider
         assert _infer_provider("claude-sonnet") == "anthropic"
         assert _infer_provider("claude-3-5-sonnet") == "anthropic"
 
     def test_infer_google(self):
-        from flowgate.proxy.router import _infer_provider
+        from flow_llm_router.proxy.router import _infer_provider
         assert _infer_provider("gemini-pro") == "google"
 
     def test_infer_slash_format(self):
-        from flowgate.proxy.router import _infer_provider
+        from flow_llm_router.proxy.router import _infer_provider
         assert _infer_provider("azure/gpt-4") == "azure"
 
     def test_infer_unknown(self):
-        from flowgate.proxy.router import _infer_provider
+        from flow_llm_router.proxy.router import _infer_provider
         assert _infer_provider("unknown-model") == ""
 
 
@@ -336,7 +372,7 @@ class TestCostTracking:
             "response_cost": 0.0042,
         }
 
-        with patch("flowgate.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
+        with patch("flow_llm_router.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
             resp = await client.post("/v1/chat/completions", json={
                 "model": "gpt-4o",
                 "messages": [{"role": "user", "content": "Hello"}],
@@ -357,7 +393,7 @@ class TestCostTracking:
         mock_response = _make_litellm_response("Hi")
         mock_response._hidden_params = {}
 
-        with patch("flowgate.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
+        with patch("flow_llm_router.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
             await client.post("/v1/chat/completions", json={
                 "model": "gpt-4o",
                 "messages": [{"role": "user", "content": "Hi"}],
@@ -381,7 +417,7 @@ class TestSmartRouterWiring:
         """When smart_router.enabled=False (default), tier is None in the log."""
         mock_response = _make_litellm_response("ok")
 
-        with patch("flowgate.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
+        with patch("flow_llm_router.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
             await client.post("/v1/chat/completions", json={
                 "model": "gpt-4o",
                 "messages": [{"role": "user", "content": "Hi"}],
@@ -401,7 +437,7 @@ class TestSmartRouterWiring:
         """model_requested in log should always be the original model from the client."""
         mock_response = _make_litellm_response("ok")
 
-        with patch("flowgate.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
+        with patch("flow_llm_router.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
             await client.post("/v1/chat/completions", json={
                 "model": "gpt-4o",
                 "messages": [{"role": "user", "content": "Hello"}],
@@ -425,7 +461,7 @@ class TestLogRedaction:
         """API key patterns in message content must be redacted in the stored log."""
         mock_response = _make_litellm_response("Done")
 
-        with patch("flowgate.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
+        with patch("flow_llm_router.proxy.router.litellm.acompletion", new=AsyncMock(return_value=mock_response)):
             await client.post("/v1/chat/completions", json={
                 "model": "gpt-4o",
                 "messages": [{"role": "user", "content": "My key is sk-abcdefghijklmnopqrstuvwx"}],

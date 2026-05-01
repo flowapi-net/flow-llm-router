@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, DonutChart, AreaChart, Text, Metric, Badge } from "@tremor/react";
 import { fetchAPI, apiURL } from "@/lib/api";
+import ModelPickerModal, {
+  type CatalogModelRow,
+  catalogContainsRoutingValue,
+} from "@/components/ModelPickerModal";
 import useSWR from "swr";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -36,11 +40,6 @@ interface TestResult {
   routed_model: string;
   original_model: string;
   latency_us: number;
-}
-
-interface ModelItem {
-  id: string;
-  model_id?: string;
 }
 
 /* ─── Tier badge colors ─── */
@@ -102,48 +101,58 @@ function LabeledSlider({
   );
 }
 
-/* ─── Model selector ─── */
+/* ─── Model picker (modal) ─── */
 
-const DEFAULT_SELECT_CLASS =
-  "flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+const FALLBACK_CATALOG: CatalogModelRow[] = [
+  { id: "fb-1", provider: "openai", model_id: "gpt-4o-mini", display_name: null },
+  { id: "fb-2", provider: "openai", model_id: "gpt-4o", display_name: null },
+  { id: "fb-3", provider: "anthropic", model_id: "claude-sonnet", display_name: null },
+  { id: "fb-4", provider: "openai", model_id: "o1-preview", display_name: null },
+];
 
-function ModelSelect({
+function ModelPickerButton({
   label,
   value,
   onChange,
-  models,
+  catalog,
   allowEmpty = false,
   emptyLabel = "— Select —",
   labelClassName = "text-sm text-gray-600 w-28 shrink-0 font-medium",
-  selectClassName = DEFAULT_SELECT_CLASS,
+  buttonClassName = "flex-1 flex items-center justify-between rounded-lg border border-gray-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white",
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
-  models: string[];
+  catalog: CatalogModelRow[];
   allowEmpty?: boolean;
   emptyLabel?: string;
   labelClassName?: string;
-  selectClassName?: string;
+  buttonClassName?: string;
 }) {
-  const withLegacy =
-    value !== "" && !models.includes(value) ? [value, ...models] : models;
+  const [open, setOpen] = useState(false);
+  const inCatalog = catalogContainsRoutingValue(catalog, value);
+  const displayText = allowEmpty && !value ? emptyLabel : value || "(not set)";
+
   return (
-    <div className="flex items-center gap-3">
-      <span className={labelClassName}>{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={selectClassName}
-      >
-        {allowEmpty && <option value="">{emptyLabel}</option>}
-        {withLegacy.map((m) => (
-          <option key={m} value={m}>
-            {m}
-          </option>
-        ))}
-      </select>
-    </div>
+    <>
+      <div className="flex items-center gap-3">
+        <span className={labelClassName}>{label}</span>
+        <button type="button" onClick={() => setOpen(true)} className={buttonClassName}>
+          <span className="truncate font-mono">{displayText}</span>
+          <span className="text-gray-400 text-xs shrink-0 ml-2">Choose…</span>
+        </button>
+      </div>
+      <ModelPickerModal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={`Choose model — ${label}`}
+        models={catalog}
+        legacyValue={value && !inCatalog ? value : undefined}
+        allowEmpty={allowEmpty}
+        emptyLabel={emptyLabel}
+        onSelect={onChange}
+      />
+    </>
   );
 }
 
@@ -152,6 +161,7 @@ function ModelSelect({
 export default function RouterPage() {
   const [config, setConfig] = useState<RouterConfigData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [showWeights, setShowWeights] = useState(false);
@@ -160,9 +170,10 @@ export default function RouterPage() {
   const [testPrompt, setTestPrompt] = useState("");
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [testing, setTesting] = useState(false);
+  const [mfLoading, setMfLoading] = useState(false);
+  const [mfLoadMsg, setMfLoadMsg] = useState("");
 
-  // Models list for dropdowns
-  const [modelList, setModelList] = useState<string[]>([]);
+  const [modelCatalog, setModelCatalog] = useState<CatalogModelRow[]>([]);
 
   // Stats
   const { data: statsData } = useSWR(apiURL("/router/stats?days=7"), fetcher, {
@@ -173,24 +184,42 @@ export default function RouterPage() {
   // Load config
   const loadConfig = useCallback(async () => {
     setLoading(true);
-    try {
-      const res = await fetch(apiURL("/router/config"));
-      const json = await res.json();
-      if (json.success) setConfig(json.data);
-    } catch {
-      /* ignore */
-    } finally {
-      setLoading(false);
+    setLoadError("");
+    let lastError = "Unknown error";
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const res = await fetch(apiURL("/router/config"), { cache: "no-store" });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const json = await res.json();
+        if (!json?.success || !json?.data) {
+          throw new Error("Invalid response payload");
+        }
+        setConfig(json.data);
+        setLoading(false);
+        return;
+      } catch (e: any) {
+        lastError = e?.message || "Request failed";
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+        }
+      }
     }
+
+    setConfig(null);
+    setLoadError(lastError);
+    setLoading(false);
   }, []);
 
   // Load models
   const loadModels = useCallback(async () => {
     try {
-      const data = await fetchAPI<ModelItem[]>("/models");
-      setModelList(data.map((m) => m.model_id || m.id));
+      const data = await fetchAPI<CatalogModelRow[]>("/models");
+      setModelCatalog(data);
     } catch {
-      setModelList(["gpt-4o-mini", "gpt-4o", "claude-sonnet", "o1-preview"]);
+      setModelCatalog(FALLBACK_CATALOG);
     }
   }, []);
 
@@ -215,22 +244,63 @@ export default function RouterPage() {
     });
   };
 
+  const saveDisabled = saving;
+
   // Save
   const handleSave = async () => {
     if (!config) return;
     setSaving(true);
     setSaveMsg("");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       await fetchAPI("/router/config", {
         method: "PUT",
         body: JSON.stringify(config),
+        signal: controller.signal,
       });
       setSaveMsg("saved");
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (e: any) {
-      setSaveMsg(e.message || "save failed");
+      if (e?.name === "AbortError") {
+        setSaveMsg("save timeout (15s).");
+      } else {
+        setSaveMsg(e.message || "save failed");
+      }
     } finally {
+      clearTimeout(timeout);
       setSaving(false);
+    }
+  };
+
+  const handleLoadMfModel = async () => {
+    if (!config) return;
+    setMfLoading(true);
+    setMfLoadMsg("");
+    try {
+      const res = await fetchAPI<{ success: boolean; data: { loaded: boolean; strategy: string; message: string } }>(
+        "/router/classifier/mf-load",
+        {
+          method: "POST",
+          body: JSON.stringify(config),
+        }
+      );
+      const msg = res?.data?.message || (res?.data?.loaded ? "MF model loaded." : "MF load failed.");
+      setMfLoadMsg(msg);
+      // Sync UI strategy with runtime strategy after load attempt.
+      setConfig((prev) =>
+        prev
+          ? {
+              ...prev,
+              enabled: (res?.data?.strategy || "off") !== "off",
+              strategy: (res?.data?.strategy || "off") === "off" ? "complexity" : (res?.data?.strategy || "complexity"),
+            }
+          : prev
+      );
+    } catch (e: any) {
+      setMfLoadMsg(e?.message || "MF load failed.");
+    } finally {
+      setMfLoading(false);
     }
   };
 
@@ -337,7 +407,16 @@ export default function RouterPage() {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold text-gray-900">Smart Router</h1>
-        <Card className="p-8 text-center text-red-500">Failed to load router configuration.</Card>
+        <Card className="p-8 text-center">
+          <p className="text-red-500">Failed to load router configuration.</p>
+          {loadError && <p className="mt-2 text-xs text-gray-500">Reason: {loadError}</p>}
+          <button
+            onClick={loadConfig}
+            className="mt-4 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+          >
+            Retry
+          </button>
+        </Card>
       </div>
     );
   }
@@ -360,7 +439,7 @@ export default function RouterPage() {
           )}
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saveDisabled}
             className="px-5 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             {saving ? "Saving..." : "Save Configuration"}
@@ -425,16 +504,19 @@ export default function RouterPage() {
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-gray-700">Model Mapping</h3>
             <p className="text-xs text-gray-500">
-              Each complexity tier routes to a different model. Select from your synced models.
+              Each tier stores{" "}
+              <code className="bg-gray-100 px-1 rounded text-[11px]">provider/model_id</code> (e.g.{" "}
+              <code className="bg-gray-100 px-1 rounded text-[11px]">siliconflow/BAAI/bge-large-en-v1.5</code>)
+              so routing can pick the correct provider key.
             </p>
             <div className="space-y-2">
               {(["SIMPLE", "MEDIUM", "COMPLEX", "REASONING"] as const).map((tier) => (
-                <ModelSelect
+                <ModelPickerButton
                   key={tier}
                   label={tier}
                   value={config.complexity.tiers[tier] || ""}
                   onChange={(v) => updateTier(tier, v)}
-                  models={modelList}
+                  catalog={modelCatalog}
                 />
               ))}
             </div>
@@ -573,7 +655,7 @@ export default function RouterPage() {
               <div>
                 <h3 className="text-sm font-medium text-amber-900">MF Router — Embedding Settings</h3>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  MF needs embeddings from the same provider that listed this model. FlowGate uses the
+                  MF needs embeddings from the same provider that listed this model. Flow LLM Router uses the
                   provider key and base URL you already configured on the Providers page (vault). Pick a
                   model from the catalog after syncing. If the model is not found or the vault is locked,
                   the server falls back to <code className="bg-amber-100 px-1 rounded">OPENAI_API_KEY</code> /{" "}
@@ -583,15 +665,31 @@ export default function RouterPage() {
               </div>
 
               <div className="space-y-2">
-                <ModelSelect
+                <button
+                  type="button"
+                  onClick={handleLoadMfModel}
+                  disabled={mfLoading}
+                  className="px-4 py-2 text-sm font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                >
+                  {mfLoading ? "Loading..." : "Load MF Model"}
+                </button>
+                {mfLoadMsg && (
+                  <p className={`text-xs ${mfLoadMsg.includes("loaded") ? "text-green-700" : "text-red-600"}`}>
+                    {mfLoadMsg}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <ModelPickerButton
                   label="Embedding model"
                   value={config.classifier.mf_embedding_model}
                   onChange={(v) => updateClassifier({ mf_embedding_model: v })}
-                  models={modelList}
+                  catalog={modelCatalog}
                   allowEmpty
                   emptyLabel="— Choose from synced models —"
                   labelClassName="text-sm text-amber-800 w-36 shrink-0"
-                  selectClassName="flex-1 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  buttonClassName="flex-1 flex items-center justify-between rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-amber-400"
                 />
               </div>
             </div>

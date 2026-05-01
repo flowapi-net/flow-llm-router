@@ -1,6 +1,6 @@
 # API And Operations
 
-This document covers the public API surface, the operator workflow, and the most important runtime behaviors for running FlowGate locally or on a private server.
+This document covers the public API surface, the operator workflow, and the most important runtime behaviors for running Flow LLM Router locally or on a private server.
 
 ## Base URLs
 
@@ -14,18 +14,18 @@ Default local addresses:
 
 Typical first-run flow:
 
-1. start FlowGate
+1. start Flow LLM Router
 2. open the dashboard
 3. set a master password if the vault is not initialized
 4. unlock the vault
 5. add provider keys
 6. optionally sync provider models
 7. optionally create caller tokens
-8. point clients to FlowGate's `/v1` base URL
+8. point clients to Flow LLM Router's `/v1` base URL
 
 ## Authentication Model
 
-FlowGate uses two different token systems:
+Flow LLM Router uses two different token systems:
 
 ### Admin auth token
 
@@ -82,7 +82,7 @@ curl http://127.0.0.1:7798/v1/chat/completions \
 
 OpenAI-compatible embeddings endpoint.
 
-FlowGate supports:
+Flow LLM Router supports:
 
 - standard LiteLLM embedding forwarding
 - direct JSON forwarding for custom OpenAI-compatible gateways when needed
@@ -299,7 +299,7 @@ If prompt logging is disabled, the stored request body becomes `[redacted]`.
 
 ### Vault auto-unlock
 
-FlowGate attempts startup unlock in this order:
+Flow LLM Router attempts startup unlock in this order:
 
 1. persisted master key file
 2. `FLOWGATE_MASTER_PASSWORD` environment variable
@@ -324,7 +324,7 @@ For local experimentation, open access may be acceptable. For any shared environ
 
 ## Troubleshooting
 
-### Proxy returns `401 Invalid or missing FlowGate access token`
+### Proxy returns `401 Invalid or missing Flow LLM Router access token`
 
 Likely causes:
 
@@ -342,7 +342,7 @@ Expected reasons include:
 
 - RouteLLM extra not installed
 - classifier initialization failed
-- classifier scoring failed and FlowGate fell back to complexity routing
+- classifier scoring failed and Flow LLM Router fell back to complexity routing
 
 ### Requests fail against a custom provider
 

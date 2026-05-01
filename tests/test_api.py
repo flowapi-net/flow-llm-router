@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from flowgate.db.models import RequestLog
+from flow_llm_router.db.models import RequestLog
 
 
 # ════════════════════════════════════════════════════════════════
@@ -239,8 +239,8 @@ class TestKeysPlaintextNeverReturned:
 async def _insert_log(client, **overrides):
     """Helper: directly insert a RequestLog via the app state."""
     # We use the app's DB path to create a real log entry
-    import flowgate.db.engine as eng
-    from flowgate.db.engine import get_session
+    import flow_llm_router.db.engine as eng
+    from flow_llm_router.db.engine import get_session
 
     session = get_session()
     defaults = dict(

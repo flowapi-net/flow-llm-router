@@ -7,7 +7,7 @@ import textwrap
 
 import pytest
 
-from flowgate.config import (
+from flow_llm_router.config import (
     IPWhitelistConfig,
     SecurityConfig,
     Settings,
@@ -42,12 +42,12 @@ class TestDefaultSettings:
         assert s.security.ip_whitelist.mode == "local_only"
         assert s.security.ip_whitelist.enabled is True
         assert s.security.auth_token_ttl_minutes == 60
-        assert s.security.master_key_path == "~/.flowgate/master.key"
+        assert s.security.master_key_path == "~/.flow_llm_router/master.key"
 
 
 class TestLoadFromYAML:
     def test_load_server_config(self, tmp_path):
-        cfg = tmp_path / "flowgate.yaml"
+        cfg = tmp_path / "flow_llm_router.yaml"
         cfg.write_text(textwrap.dedent("""\
             server:
               host: 0.0.0.0
@@ -58,13 +58,13 @@ class TestLoadFromYAML:
         assert s.server.port == 9000
 
     def test_load_database_config(self, tmp_path):
-        cfg = tmp_path / "flowgate.yaml"
+        cfg = tmp_path / "flow_llm_router.yaml"
         cfg.write_text("database:\n  path: /tmp/test.db\n")
         s = load_settings(str(cfg))
         assert s.database.path == "/tmp/test.db"
 
     def test_load_logging_config(self, tmp_path):
-        cfg = tmp_path / "flowgate.yaml"
+        cfg = tmp_path / "flow_llm_router.yaml"
         cfg.write_text(textwrap.dedent("""\
             logging:
               level: DEBUG
@@ -77,7 +77,7 @@ class TestLoadFromYAML:
         assert s.logging.redact_secrets is False
 
     def test_load_security_config(self, tmp_path):
-        cfg = tmp_path / "flowgate.yaml"
+        cfg = tmp_path / "flow_llm_router.yaml"
         cfg.write_text(textwrap.dedent("""\
             security:
               vault_enabled: false
@@ -98,11 +98,11 @@ class TestLoadFromYAML:
         assert "10.0.0.1" in s.security.ip_whitelist.allowed_ips
 
     def test_missing_file_uses_defaults(self):
-        s = load_settings("/nonexistent/path/flowgate.yaml")
+        s = load_settings("/nonexistent/path/flow_llm_router.yaml")
         assert s.server.host == "127.0.0.1"
 
     def test_empty_yaml_uses_defaults(self, tmp_path):
-        cfg = tmp_path / "flowgate.yaml"
+        cfg = tmp_path / "flow_llm_router.yaml"
         cfg.write_text("")
         s = load_settings(str(cfg))
         assert s.server.port == 7798
@@ -111,20 +111,20 @@ class TestLoadFromYAML:
 class TestEnvVarSubstitution:
     def test_resolve_env_var_in_string(self, tmp_path, monkeypatch):
         monkeypatch.setenv("TEST_DB_PATH", "/env/path/test.db")
-        cfg = tmp_path / "flowgate.yaml"
+        cfg = tmp_path / "flow_llm_router.yaml"
         cfg.write_text("database:\n  path: ${TEST_DB_PATH}\n")
         s = load_settings(str(cfg))
         assert s.database.path == "/env/path/test.db"
 
     def test_missing_env_var_becomes_empty_string(self, tmp_path, monkeypatch):
         monkeypatch.delenv("MISSING_VAR", raising=False)
-        cfg = tmp_path / "flowgate.yaml"
+        cfg = tmp_path / "flow_llm_router.yaml"
         cfg.write_text("database:\n  path: ${MISSING_VAR}\n")
         s = load_settings(str(cfg))
         assert s.database.path == ""
 
     def test_non_env_var_string_unchanged(self, tmp_path):
-        cfg = tmp_path / "flowgate.yaml"
+        cfg = tmp_path / "flow_llm_router.yaml"
         cfg.write_text("database:\n  path: ./data.db\n")
         s = load_settings(str(cfg))
         assert s.database.path == "./data.db"

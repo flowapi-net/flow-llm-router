@@ -159,9 +159,9 @@ export default function SettingsPage() {
           <div className="flex-1">
             <Text className="font-semibold text-base">密钥保险箱（Vault）</Text>
             <p className="mt-1 text-sm text-gray-500 leading-relaxed">
-              FlowGate 将所有 Provider API Key 加密存储在本地 SQLite 中。
+              Flow LLM Router 将所有 Provider API Key 加密存储在本地 SQLite 中。
               Vault 由一个<strong className="text-gray-700">主密码</strong>保护——只有输入正确主密码后，
-              FlowGate 才会在调用 LLM 时临时解密所需的 Key，调用完毕立即销毁明文，
+              Flow LLM Router 才会在调用 LLM 时临时解密所需的 Key，调用完毕立即销毁明文，
               不会将 Key 长期留在内存或环境变量中。
             </p>
             <p className="mt-1.5 text-xs text-gray-400">

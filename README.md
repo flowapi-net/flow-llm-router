@@ -33,7 +33,7 @@
 ## At A Glance
 
 - [The Problem](#the-problem)
-- [Why FlowGate](#why-flowgate)
+- [Why Flow LLM Router](#why-flow_llm_router)
 - [Who It Is For](#who-it-is-for)
 - [Use Cases](#use-cases)
 - [Why Pair It With FlowAPI](#why-pair-it-with-flowapi)
@@ -68,7 +68,7 @@
 
 ## What It Ships
 
-| Area          | What FlowGate provides                                                                                                            |
+| Area          | What Flow LLM Router provides                                                                                                            |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | **Proxy**     | `POST /v1/chat/completions`, streaming chat completions, `POST /v1/embeddings`, and `GET /v1/models`.                             |
 | **Dashboard** | Analytics, request logs, provider management, model catalog, router configuration, caller token management, and integration help. |
@@ -84,7 +84,7 @@ Your App / Agent / SDK
         |
         | OpenAI-compatible requests
         v
-  FlowGate Proxy  ------------------------------+
+  Flow LLM Router Proxy  ------------------------------+
         |                                       |
         | auth + routing + logging              |
         v                                       |
@@ -105,24 +105,24 @@ OpenAI / Anthropic / Gemini / DeepSeek / Qwen / custom OpenAI-compatible backend
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | **Call OpenAI or Anthropic directly** | No unified routing, no local gateway, no provider abstraction, no centralized logs                                        |
 | **Use a generic proxy only**          | Basic forwarding is not enough if you also want routing policy, encrypted key management, and operator-friendly analytics |
-| **Use FlowGate**                      | Keep one OpenAI-compatible endpoint while adding routing, logs, local security controls, and provider portability         |
+| **Use Flow LLM Router**                      | Keep one OpenAI-compatible endpoint while adding routing, logs, local security controls, and provider portability         |
 
 ## Why Pair It With FlowAPI
 
-FlowGate and FlowAPI solve different layers of the cost stack:
+Flow LLM Router and FlowAPI solve different layers of the cost stack:
 
 | Layer                      | What optimizes it                                               |
 | -------------------------- | --------------------------------------------------------------- |
 | **Token unit price**       | [FlowAPI.net](https://flowapi.net) as the upstream endpoint     |
-| **Token usage efficiency** | FlowGate's routing, request visibility, and local control plane |
+| **Token usage efficiency** | Flow LLM Router's routing, request visibility, and local control plane |
 
 If you are serious about cost control, you usually want both.
 
 ## Where The Savings Come From
 
-FlowGate is not magic. It improves cost structure through a few concrete levers:
+Flow LLM Router is not magic. It improves cost structure through a few concrete levers:
 
-| Cost lever                       | What FlowGate changes                                                | Why it matters                                                          |
+| Cost lever                       | What Flow LLM Router changes                                                | Why it matters                                                          |
 | -------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | **Model selection**              | Routes lower-complexity work to cheaper models                       | Prevents expensive models from handling trivial tasks                   |
 | **Operational visibility**       | Exposes local logs, model usage, latency, and routing data           | Makes waste visible so teams can actually fix it                        |
@@ -133,7 +133,7 @@ FlowGate is not magic. It improves cost structure through a few concrete levers:
 
 ### 1. Drop-in OpenAI compatibility
 
-FlowGate exposes an OpenAI-style API surface so existing clients can usually switch by changing only the base URL and token source.
+Flow LLM Router exposes an OpenAI-style API surface so existing clients can usually switch by changing only the base URL and token source.
 
 Supported endpoints today:
 
@@ -159,7 +159,7 @@ The dashboard surfaces this through overview metrics, timelines, provider/model 
 
 ### 3. Built-in security controls
 
-FlowGate separates **caller access** from **provider credentials**:
+Flow LLM Router separates **caller access** from **provider credentials**:
 
 - **Caller tokens** control who is allowed to use the proxy.
 - **Provider keys** are stored encrypted in SQLite.
@@ -171,11 +171,11 @@ If no caller tokens exist yet, proxy access remains open for easier local setup.
 
 ### 4. Smart routing without leaving the box
 
-FlowGate supports three routing modes:
+Flow LLM Router supports three routing modes:
 
 - **`off`**: pass through the requested model unchanged
 - **`complexity`**: local rule-based routing using a 7-dimension prompt complexity scorer
-- **`classifier`**: RouteLLM-based routing, mapped back into FlowGate's four-tier model layout
+- **`classifier`**: RouteLLM-based routing, mapped back into Flow LLM Router's four-tier model layout
 
 Both routing strategies use the same tier mapping:
 
@@ -184,11 +184,11 @@ Both routing strategies use the same tier mapping:
 - `COMPLEX`
 - `REASONING`
 
-If RouteLLM is unavailable or fails at runtime, FlowGate falls back to rule-based routing instead of breaking requests.
+If RouteLLM is unavailable or fails at runtime, Flow LLM Router falls back to rule-based routing instead of breaking requests.
 
 ### 5. Analytics for finding your token assassins
 
-FlowGate includes a built-in local dashboard so you can inspect:
+Flow LLM Router includes a built-in local dashboard so you can inspect:
 
 - which models are used most often
 - which providers consume the most tokens
@@ -199,7 +199,7 @@ Cost optimization gets much easier once the waste is visible.
 
 ### 6. Skills-ready foundation
 
-FlowGate includes optional skills-related configuration and package extras for teams exploring retrieval- and tool-oriented prompt optimization.
+Flow LLM Router includes optional skills-related configuration and package extras for teams exploring retrieval- and tool-oriented prompt optimization.
 
 In the current repository, this is best understood as a foundation for prompt-efficiency work rather than a fully productized dynamic skill-routing system.
 
@@ -223,7 +223,7 @@ pip install 'flow-llm-router[skills]'
 
 ## Quick Start
 
-### 1. Start FlowGate
+### 1. Start Flow LLM Router
 
 ```bash
 flow-router start
@@ -238,7 +238,7 @@ Default endpoints:
 To load a custom config file:
 
 ```bash
-export FLOWGATE_CONFIG=/path/to/flowgate.yaml
+export FLOWGATE_CONFIG=/path/to/flow_llm_router.yaml
 flow-router start
 ```
 
@@ -252,7 +252,7 @@ Go to <http://127.0.0.1:7798> and:
 - optionally create caller tokens
 - optionally configure the smart router
 
-### 3. Point your SDK at FlowGate
+### 3. Point your SDK at Flow LLM Router
 
 ```python
 from openai import OpenAI
@@ -264,20 +264,20 @@ client = OpenAI(
 
 response = client.chat.completions.create(
     model="gpt-4o",
-    messages=[{"role": "user", "content": "Hello from FlowGate"}],
+    messages=[{"role": "user", "content": "Hello from Flow LLM Router"}],
 )
 
 print(response.choices[0].message.content)
 ```
 
-If you have not created any caller tokens yet, FlowGate accepts requests without token enforcement. In production, create caller tokens and restrict access explicitly.
+If you have not created any caller tokens yet, Flow LLM Router accepts requests without token enforcement. In production, create caller tokens and restrict access explicitly.
 
 ## Configuration
 
 Copy the example file and adjust it for your environment:
 
 ```bash
-cp flowgate.yaml.example flowgate.yaml
+cp flow_llm_router.yaml.example flow_llm_router.yaml
 ```
 
 Main configuration areas:
@@ -310,7 +310,7 @@ Environment references such as `${OPENAI_API_KEY}` are supported in YAML values.
 | --------------------- | ------------------------------------------------------- |
 | `flow-router start`   | Start the FastAPI server and static dashboard           |
 | `flow-router add-key` | Interactively add a provider key to the encrypted vault |
-| `flow-router version` | Print the installed FlowGate version                    |
+| `flow-router version` | Print the installed Flow LLM Router version                    |
 
 Use `flow-router --help` for all flags and options.
 
@@ -352,23 +352,23 @@ bash scripts/build_frontend.sh
 
 ## FAQ
 
-### Is FlowGate a hosted proxy?
+### Is Flow LLM Router a hosted proxy?
 
 No. This repository is the local-first gateway layer you run yourself.
 
-### Does FlowGate replace LiteLLM?
+### Does Flow LLM Router replace LiteLLM?
 
-No. FlowGate uses LiteLLM as the forwarding layer and adds local routing, security, and observability on top.
+No. Flow LLM Router uses LiteLLM as the forwarding layer and adds local routing, security, and observability on top.
 
-### Does FlowGate require me to rewrite my OpenAI SDK integration?
+### Does Flow LLM Router require me to rewrite my OpenAI SDK integration?
 
 Usually no. In most cases you only change the base URL and, if enabled, the caller token.
 
-### Can I use FlowGate without FlowAPI.net?
+### Can I use Flow LLM Router without FlowAPI.net?
 
-Yes. FlowGate works independently with direct provider APIs and custom OpenAI-compatible endpoints. FlowAPI is an optional upstream pairing for better token pricing.
+Yes. Flow LLM Router works independently with direct provider APIs and custom OpenAI-compatible endpoints. FlowAPI is an optional upstream pairing for better token pricing.
 
-### Does FlowGate already implement full dynamic top-k skill injection?
+### Does Flow LLM Router already implement full dynamic top-k skill injection?
 
 Not as a finished production feature in the current repository. The project includes skills-related configuration and extension hooks, but the README positions this today as an optimization direction and foundation rather than a fully shipped headline workflow.
 
@@ -378,7 +378,7 @@ Request metadata and catalog data live in local SQLite. Provider API keys are st
 
 ## Project Status
 
-FlowGate is currently **alpha** and focused on shipping a tight local gateway experience for AI developers and small teams.
+Flow LLM Router is currently **alpha** and focused on shipping a tight local gateway experience for AI developers and small teams.
 
 Current strengths:
 

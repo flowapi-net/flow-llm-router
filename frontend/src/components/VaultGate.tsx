@@ -92,7 +92,7 @@ export default function VaultGate({ children }: { children: React.ReactNode }) {
   if (state === "checking") {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-gray-950">
-        <div className="text-gray-500 text-sm animate-pulse">正在连接 FlowGate…</div>
+        <div className="text-gray-500 text-sm animate-pulse">正在连接 Flow LLM Router…</div>
       </div>
     );
   }
@@ -103,7 +103,7 @@ export default function VaultGate({ children }: { children: React.ReactNode }) {
         <div className="w-full max-w-sm px-4">
           <div className="text-center mb-8">
             <div className="text-4xl mb-3">⚡</div>
-            <h1 className="text-2xl font-bold text-white">欢迎使用 FlowGate</h1>
+            <h1 className="text-2xl font-bold text-white">欢迎使用 Flow LLM Router</h1>
             <p className="text-gray-400 text-sm mt-2">
               首次使用需要设置一个 Master Password。<br />
               所有 Provider API Key 将使用此密码加密存储。
@@ -164,7 +164,7 @@ export default function VaultGate({ children }: { children: React.ReactNode }) {
         <div className="w-full max-w-sm px-4">
           <div className="text-center mb-8">
             <div className="text-4xl mb-3">🔒</div>
-            <h1 className="text-2xl font-bold text-white">FlowGate 已锁定</h1>
+            <h1 className="text-2xl font-bold text-white">Flow LLM Router 已锁定</h1>
             <p className="text-gray-400 text-sm mt-2">
               输入 Master Password 解锁 Vault，<br />
               API Key 才能在代理请求中自动注入。

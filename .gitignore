@@ -28,7 +28,7 @@ skills.chroma/
 # Environment
 .env
 .env.local
-flowgate.yaml
+flow_llm_router.yaml
 
 # Frontend
 frontend/node_modules/
@@ -36,8 +36,8 @@ frontend/out/
 frontend/.next/
 
 # Built static (regenerated from frontend)
-src/flowgate/static/*
-!src/flowgate/static/.gitkeep
+src/flow_llm_router/static/*
+!src/flow_llm_router/static/.gitkeep
 
 # Testing
 .pytest_cache/

@@ -46,10 +46,10 @@ Useful flags:
 
 ### App factory
 
-FlowGate uses the FastAPI app factory:
+Flow LLM Router uses the FastAPI app factory:
 
 ```bash
-uvicorn flowgate.app:create_app --factory --reload
+uvicorn flow_llm_router.app:create_app --factory --reload
 ```
 
 The CLI is still the most accurate way to run the project because it mirrors vault-unlock startup behavior more closely.
@@ -59,7 +59,7 @@ The CLI is still the most accurate way to run the project because it mirrors vau
 Create a local config file from the example:
 
 ```bash
-cp flowgate.yaml.example flowgate.yaml
+cp flow_llm_router.yaml.example flow_llm_router.yaml
 ```
 
 Common things to adjust for local work:
@@ -107,7 +107,7 @@ This script:
 
 1. runs `npm ci`
 2. runs `npm run build`
-3. copies `frontend/out/*` into `src/flowgate/static/`
+3. copies `frontend/out/*` into `src/flow_llm_router/static/`
 
 If you modify the dashboard and want the FastAPI app to serve the updated UI, rebuilding and copying the static export is required.
 
@@ -195,14 +195,14 @@ Top-level structure:
 
 | Path | Purpose |
 | --- | --- |
-| `src/flowgate/app.py` | App factory and startup lifecycle |
-| `src/flowgate/cli.py` | CLI entrypoints |
-| `src/flowgate/config.py` | YAML-backed settings dataclasses |
-| `src/flowgate/api/` | Dashboard and admin REST endpoints |
-| `src/flowgate/proxy/` | OpenAI-compatible proxy endpoints |
-| `src/flowgate/security/` | Vault, IP guard, redaction, persisted master key handling |
-| `src/flowgate/smart_router/` | Rule-based and classifier routing logic |
-| `src/flowgate/db/` | SQLModel schema and DB helpers |
+| `src/flow_llm_router/app.py` | App factory and startup lifecycle |
+| `src/flow_llm_router/cli.py` | CLI entrypoints |
+| `src/flow_llm_router/config.py` | YAML-backed settings dataclasses |
+| `src/flow_llm_router/api/` | Dashboard and admin REST endpoints |
+| `src/flow_llm_router/proxy/` | OpenAI-compatible proxy endpoints |
+| `src/flow_llm_router/security/` | Vault, IP guard, redaction, persisted master key handling |
+| `src/flow_llm_router/smart_router/` | Rule-based and classifier routing logic |
+| `src/flow_llm_router/db/` | SQLModel schema and DB helpers |
 | `frontend/` | Next.js dashboard source |
 | `tests/` | Python tests |
 | `scripts/` | Helper scripts for frontend build and service smoke tests |
@@ -241,9 +241,9 @@ Check whether:
 
 The router has both YAML-facing config and dashboard-facing API config. Keep both aligned with:
 
-- `src/flowgate/config.py`
-- `src/flowgate/smart_router/service.py`
-- `src/flowgate/api/router_config.py`
+- `src/flow_llm_router/config.py`
+- `src/flow_llm_router/smart_router/service.py`
+- `src/flow_llm_router/api/router_config.py`
 
 ## Release Readiness Checklist
 

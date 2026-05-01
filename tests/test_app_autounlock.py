@@ -3,12 +3,12 @@ from __future__ import annotations
 import base64
 from datetime import datetime, timezone
 
-from flowgate.app import _try_auto_unlock
-from flowgate.config import DatabaseConfig, SecurityConfig, Settings
-from flowgate.db.engine import get_session, init_db
-from flowgate.db.models import ProviderKey, VaultMeta
-from flowgate.security.master_key_store import save_master_key
-from flowgate.security.vault import Vault
+from flow_llm_router.app import _try_auto_unlock
+from flow_llm_router.config import DatabaseConfig, SecurityConfig, Settings
+from flow_llm_router.db.engine import get_session, init_db
+from flow_llm_router.db.models import ProviderKey, VaultMeta
+from flow_llm_router.security.master_key_store import save_master_key
+from flow_llm_router.security.vault import Vault
 
 
 def test_auto_unlock_with_persisted_master_key(tmp_path):

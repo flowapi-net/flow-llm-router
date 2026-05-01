@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from flowgate.config import SmartRouterConfig
-from flowgate.smart_router.complexity import ComplexityScorer, RoutingResult
-from flowgate.smart_router.service import SmartRouterService
+from flow_llm_router.config import SmartRouterConfig
+from flow_llm_router.smart_router.complexity import ComplexityScorer, RoutingResult
+from flow_llm_router.smart_router.service import SmartRouterService
 
 
 def _service(enabled: bool = True, strategy: str = "complexity", **kwargs) -> SmartRouterService:
@@ -261,7 +261,7 @@ class TestSmartRouterService:
         assert cfg.mf_embedding_model == "text-embedding-3-small"
 
     def test_classifier_fallback_without_routellm(self, monkeypatch):
-        monkeypatch.setattr("flowgate.smart_router.service._check_routellm", lambda: False)
+        monkeypatch.setattr("flow_llm_router.smart_router.service._check_routellm", lambda: False)
         cfg = SmartRouterConfig(enabled=True, strategy="classifier")
         svc = SmartRouterService(cfg)
         result = svc.route([_msg("Hello")], "gpt-4o")

@@ -4,6 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@tremor/react";
 import { fetchAPI } from "@/lib/api";
 
+interface ProviderKeyRow {
+  provider: string;
+  enabled: boolean;
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -33,6 +38,14 @@ export default function ModelsPage() {
   const [search, setSearch] = useState("");
   const [activeProvider, setActiveProvider] = useState<string>("all");
 
+  const [addOpen, setAddOpen] = useState(false);
+  const [providerOptions, setProviderOptions] = useState<string[]>([]);
+  const [addProvider, setAddProvider] = useState("");
+  const [addModelName, setAddModelName] = useState("");
+  const [addSlug, setAddSlug] = useState("");
+  const [addSaving, setAddSaving] = useState(false);
+  const [addError, setAddError] = useState("");
+
   const loadModels = useCallback(async () => {
     setLoading(true);
     try {
@@ -46,6 +59,26 @@ export default function ModelsPage() {
   }, []);
 
   useEffect(() => { loadModels(); }, [loadModels]);
+
+  const loadProviderOptions = useCallback(async () => {
+    try {
+      const keys = await fetchAPI<ProviderKeyRow[]>("/keys");
+      const names = Array.from(
+        new Set(keys.filter((k) => k.enabled).map((k) => k.provider)),
+      ).sort();
+      setProviderOptions(names);
+      setAddProvider((prev) => (prev && names.includes(prev) ? prev : names[0] || ""));
+    } catch {
+      setProviderOptions([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (addOpen) {
+      setAddError("");
+      loadProviderOptions();
+    }
+  }, [addOpen, loadProviderOptions]);
 
   const providers = useMemo(() => {
     const set = new Set(models.map((m) => m.provider));
@@ -61,6 +94,37 @@ export default function ModelsPage() {
       return matchProvider && matchSearch;
     });
   }, [models, activeProvider, search]);
+
+  const handleAddModel = async () => {
+    setAddError("");
+    if (!addProvider.trim()) {
+      setAddError("请选择 Provider");
+      return;
+    }
+    if (!addSlug.trim()) {
+      setAddError("请输入 Slug（上游 model id）");
+      return;
+    }
+    setAddSaving(true);
+    try {
+      await fetchAPI("/models/manual", {
+        method: "POST",
+        body: JSON.stringify({
+          provider: addProvider.trim(),
+          model_name: addModelName.trim(),
+          slug: addSlug.trim(),
+        }),
+      });
+      setAddOpen(false);
+      setAddModelName("");
+      setAddSlug("");
+      await loadModels();
+    } catch (e: any) {
+      setAddError(e.message || "添加失败");
+    } finally {
+      setAddSaving(false);
+    }
+  };
 
   const grouped = useMemo(() => {
     const map = new Map<string, ModelItem[]>();
@@ -82,13 +146,107 @@ export default function ModelsPage() {
             <a href="/providers/" className="text-blue-600 hover:underline">Providers</a> page to sync.
           </p>
         </div>
-        <button
-          onClick={loadModels}
-          className="px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
-        >
-          ↻ Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium"
+          >
+            Add model
+          </button>
+          <button
+            type="button"
+            onClick={loadModels}
+            className="px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+          >
+            ↻ Refresh
+          </button>
+        </div>
       </div>
+
+      {addOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-model-title"
+          onClick={() => !addSaving && setAddOpen(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-md w-full border border-gray-200 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="add-model-title" className="text-lg font-semibold text-gray-900">
+              Add model
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Slug 为上游 API 使用的 model id（例如 <code className="bg-gray-100 px-1 rounded">BAAI/bge-large-en-v1.5</code>
+              ）。列表中会显示为 <code className="bg-gray-100 px-1 rounded">provider/slug</code>。
+            </p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
+                <select
+                  value={addProvider}
+                  onChange={(e) => setAddProvider(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {providerOptions.length === 0 ? (
+                    <option value="">（暂无已启用的 Provider，请先在 Providers 添加密钥）</option>
+                  ) : (
+                    providerOptions.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Model name（可选）</label>
+                <input
+                  type="text"
+                  value={addModelName}
+                  onChange={(e) => setAddModelName(e.target.value)}
+                  placeholder="展示名称，不填则用 Slug"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Slug</label>
+                <input
+                  type="text"
+                  value={addSlug}
+                  onChange={(e) => setAddSlug(e.target.value)}
+                  placeholder="e.g. BAAI/bge-large-en-v1.5"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              {addError && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{addError}</p>
+              )}
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={addSaving}
+                onClick={() => setAddOpen(false)}
+                className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={addSaving || !addProvider || providerOptions.length === 0}
+                onClick={handleAddModel}
+                className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {addSaving ? "Adding…" : "Add"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">

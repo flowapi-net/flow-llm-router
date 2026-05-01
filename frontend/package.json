@@ -1,5 +1,5 @@
 {
-  "name": "flowgate-dashboard",
+  "name": "flow_llm_router-dashboard",
   "version": "0.1.0",
   "private": true,
   "scripts": {

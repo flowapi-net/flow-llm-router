@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for FlowGate tests."""
+"""Shared pytest fixtures for Flow LLM Router tests."""
 
 from __future__ import annotations
 
@@ -9,15 +9,15 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlmodel import Session, SQLModel, create_engine
 
-from flowgate.app import create_app
-from flowgate.config import (
+from flow_llm_router.app import create_app
+from flow_llm_router.config import (
     DatabaseConfig,
     IPWhitelistConfig,
     LoggingConfig,
     SecurityConfig,
     Settings,
 )
-from flowgate.security.vault import Vault
+from flow_llm_router.security.vault import Vault
 
 
 # ── In-Memory Database Fixtures ──────────────────────────────────────────────
@@ -62,13 +62,13 @@ def test_settings(tmp_path):
 
 @pytest_asyncio.fixture()
 async def client(test_settings):
-    """Async httpx client connected to a fresh FlowGate app instance.
+    """Async httpx client connected to a fresh Flow LLM Router app instance.
 
     The DB engine is explicitly initialised here because httpx's ASGITransport
     does not trigger FastAPI's lifespan events.
     """
-    import flowgate.db.engine as engine_module
-    from flowgate.db.engine import init_db
+    import flow_llm_router.db.engine as engine_module
+    from flow_llm_router.db.engine import init_db
 
     resolved = str(Path(test_settings.database.path).resolve())
     stale = engine_module._engines.pop(resolved, None)
@@ -79,7 +79,7 @@ async def client(test_settings):
 
     app = create_app(settings=test_settings)
 
-    from flowgate.smart_router.service import SmartRouterService
+    from flow_llm_router.smart_router.service import SmartRouterService
     app.state.smart_router_service = SmartRouterService(test_settings.smart_router)
 
     async with AsyncClient(
