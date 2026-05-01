@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@tremor/react";
-import { fetchAPI } from "@/lib/api";
+import { AuthExpiredError, fetchAPI, getAuthToken, setAuthToken } from "@/lib/api";
 
 interface ProviderKeyRow {
   provider: string;
@@ -19,6 +19,71 @@ function CopyButton({ text }: { text: string }) {
     >
       {copied ? "✓" : "Copy"}
     </button>
+  );
+}
+
+function ReAuthDialog({
+  onSuccess,
+  onCancel,
+}: {
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    setError("");
+    if (!password) return;
+    setLoading(true);
+    try {
+      const res = await fetchAPI<{ token: string }>("/auth/verify", {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      });
+      setAuthToken(res.token);
+      onSuccess();
+    } catch (e: any) {
+      setError(e.message || "Authentication failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm space-y-4">
+        <h3 className="text-lg font-semibold">Enter Master Password</h3>
+        <input
+          type="password"
+          placeholder="Master password"
+          value={password}
+          autoFocus
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm rounded-lg text-gray-600 hover:bg-gray-100"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {loading ? "..." : "Unlock"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -48,6 +113,20 @@ export default function ModelsPage() {
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState("");
   const [savingModelId, setSavingModelId] = useState<string | null>(null);
+  const [showReAuth, setShowReAuth] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+  const requireAuth = useCallback((action: () => void) => {
+    setPendingAction(() => action);
+    setShowReAuth(true);
+  }, []);
+
+  const handleReAuthSuccess = () => {
+    setShowReAuth(false);
+    const action = pendingAction;
+    setPendingAction(null);
+    if (action) action();
+  };
 
   const loadModels = useCallback(async () => {
     setLoading(true);
@@ -76,10 +155,14 @@ export default function ModelsPage() {
       ).sort();
       setProviderOptions(names);
       setAddProvider((prev) => (prev && names.includes(prev) ? prev : names[0] || ""));
-    } catch {
+    } catch (e: any) {
+      if (e instanceof AuthExpiredError) {
+        requireAuth(() => { void loadProviderOptions(); });
+        return;
+      }
       setProviderOptions([]);
     }
-  }, []);
+  }, [requireAuth]);
 
   useEffect(() => {
     if (addOpen) {
@@ -128,10 +211,22 @@ export default function ModelsPage() {
       setAddSlug("");
       await loadModels();
     } catch (e: any) {
-      setAddError(e.message || "添加失败");
+      if (e instanceof AuthExpiredError) {
+        requireAuth(() => { void handleAddModel(); });
+      } else {
+        setAddError(e.message || "添加失败");
+      }
     } finally {
       setAddSaving(false);
     }
+  };
+
+  const handleAddClick = () => {
+    if (!getAuthToken()) {
+      requireAuth(() => setAddOpen(true));
+      return;
+    }
+    setAddOpen(true);
   };
 
   const toggleModelEnabled = async (model: ModelItem) => {
@@ -142,6 +237,12 @@ export default function ModelsPage() {
         body: JSON.stringify({ enabled: !model.enabled }),
       });
       await loadModels();
+    } catch (e: any) {
+      if (e instanceof AuthExpiredError) {
+        requireAuth(() => { void toggleModelEnabled(model); });
+      } else {
+        alert(e.message || "保存失败");
+      }
     } finally {
       setSavingModelId(null);
     }
@@ -170,7 +271,7 @@ export default function ModelsPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setAddOpen(true)}
+            onClick={handleAddClick}
             className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium"
           >
             Add model
@@ -387,6 +488,13 @@ export default function ModelsPage() {
             </Card>
           ))}
         </div>
+      )}
+
+      {showReAuth && (
+        <ReAuthDialog
+          onSuccess={handleReAuthSuccess}
+          onCancel={() => { setShowReAuth(false); setPendingAction(null); }}
+        />
       )}
     </div>
   );
