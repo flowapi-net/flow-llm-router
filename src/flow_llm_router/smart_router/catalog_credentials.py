@@ -48,9 +48,13 @@ def resolve_openai_credentials_for_model_id(
             stmt = select(ProviderModel).where(
                 ProviderModel.provider == vault_key,
                 ProviderModel.model_id == upstream_id,
+                ProviderModel.enabled == True,  # noqa: E712
             )
         else:
-            stmt = select(ProviderModel).where(ProviderModel.model_id == upstream_id)
+            stmt = select(ProviderModel).where(
+                ProviderModel.model_id == upstream_id,
+                ProviderModel.enabled == True,  # noqa: E712
+            )
         rows = list(session.exec(stmt).all())
     finally:
         session.close()

@@ -29,6 +29,7 @@ interface ModelItem {
   display_name: string | null;
   owned_by: string | null;
   raw_created: number | null;
+  enabled: boolean;
   synced_at: string;
 }
 
@@ -37,6 +38,7 @@ export default function ModelsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeProvider, setActiveProvider] = useState<string>("all");
+  const [enabledFilter, setEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
 
   const [addOpen, setAddOpen] = useState(false);
   const [providerOptions, setProviderOptions] = useState<string[]>([]);
@@ -45,20 +47,26 @@ export default function ModelsPage() {
   const [addSlug, setAddSlug] = useState("");
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState("");
+  const [savingModelId, setSavingModelId] = useState<string | null>(null);
 
   const loadModels = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchAPI<ModelItem[]>("/models");
+      const params = new URLSearchParams();
+      if (enabledFilter === "enabled") params.set("enabled", "true");
+      if (enabledFilter === "disabled") params.set("enabled", "false");
+      const query = params.toString();
+      const data = await fetchAPI<ModelItem[]>(`/models${query ? `?${query}` : ""}`);
       setModels(data);
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabledFilter]);
 
   useEffect(() => { loadModels(); }, [loadModels]);
+  useEffect(() => { setActiveProvider("all"); }, [enabledFilter]);
 
   const loadProviderOptions = useCallback(async () => {
     try {
@@ -126,6 +134,19 @@ export default function ModelsPage() {
     }
   };
 
+  const toggleModelEnabled = async (model: ModelItem) => {
+    setSavingModelId(model.id);
+    try {
+      await fetchAPI<ModelItem>(`/models/${model.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ enabled: !model.enabled }),
+      });
+      await loadModels();
+    } finally {
+      setSavingModelId(null);
+    }
+  };
+
   const grouped = useMemo(() => {
     const map = new Map<string, ModelItem[]>();
     for (const m of filtered) {
@@ -141,7 +162,7 @@ export default function ModelsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Models</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {models.length} models synced across {providers.length - 1} provider{providers.length - 1 !== 1 ? "s" : ""}.
+            {models.filter((m) => m.enabled).length} enabled / {models.length} models synced across {providers.length - 1} provider{providers.length - 1 !== 1 ? "s" : ""}.
             Use <span className="font-mono text-xs bg-gray-100 px-1 rounded">Get Models</span> on the{" "}
             <a href="/providers/" className="text-blue-600 hover:underline">Providers</a> page to sync.
           </p>
@@ -257,6 +278,26 @@ export default function ModelsPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-56"
         />
+        <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+          {[
+            ["all", "All"],
+            ["enabled", "Enabled"],
+            ["disabled", "Disabled"],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setEnabledFilter(value as "all" | "enabled" | "disabled")}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                enabledFilter === value
+                  ? "bg-gray-900 text-white"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="flex gap-1 flex-wrap">
           {providers.map((p) => (
             <button
@@ -296,7 +337,9 @@ export default function ModelsPage() {
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700">
                     {provider}
                   </span>
-                  <span className="text-xs text-gray-400">{items.length} models</span>
+                  <span className="text-xs text-gray-400">
+                    {items.filter((m) => m.enabled).length} enabled / {items.length} models
+                  </span>
                 </div>
                 <span className="text-xs text-gray-400">
                   Synced {new Date(items[0].synced_at).toLocaleString()}
@@ -308,10 +351,35 @@ export default function ModelsPage() {
                   return (
                   <div
                     key={m.id}
-                    className="px-5 py-2.5 flex items-center justify-between hover:bg-gray-50"
+                    className={`px-5 py-2.5 flex items-center justify-between hover:bg-gray-50 ${
+                      m.enabled ? "" : "opacity-55"
+                    }`}
                   >
-                    <span className="font-mono text-sm text-gray-800">{fullName}</span>
-                    <CopyButton text={fullName} />
+                    <div className="min-w-0">
+                      <span className="font-mono text-sm text-gray-800">{fullName}</span>
+                      <span
+                        className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          m.enabled ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"
+                        }`}
+                      >
+                        {m.enabled ? "Enabled" : "Disabled"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={savingModelId === m.id}
+                        onClick={() => toggleModelEnabled(m)}
+                        className={`text-xs px-2 py-0.5 rounded transition-colors disabled:opacity-50 ${
+                          m.enabled
+                            ? "text-amber-700 bg-amber-50 hover:bg-amber-100"
+                            : "text-green-700 bg-green-50 hover:bg-green-100"
+                        }`}
+                      >
+                        {savingModelId === m.id ? "Saving…" : m.enabled ? "Disable" : "Enable"}
+                      </button>
+                      <CopyButton text={fullName} />
+                    </div>
                   </div>
                   );
                 })}

@@ -72,6 +72,7 @@ class ProviderModel(SQLModel, table=True):
     display_name: Optional[str] = None  # human-friendly label
     owned_by: Optional[str] = None      # from API response
     raw_created: Optional[int] = None   # unix timestamp from API
+    enabled: bool = Field(default=False, index=True)
     synced_at: datetime = Field(default_factory=_utcnow)
 
 

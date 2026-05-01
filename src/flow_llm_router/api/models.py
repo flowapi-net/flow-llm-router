@@ -42,6 +42,7 @@ class ModelItem(BaseModel):
     display_name: Optional[str]
     owned_by: Optional[str]
     raw_created: Optional[int]
+    enabled: bool
     synced_at: str
 
 
@@ -58,6 +59,11 @@ class AddManualModelBody(BaseModel):
     model_name: str = ""
     #: Upstream model id (OpenAI-style), e.g. ``BAAI/bge-large-en-v1.5`` — shown as ``{provider}/{slug}``.
     slug: str
+
+
+class UpdateModelBody(BaseModel):
+    display_name: Optional[str] = None
+    enabled: Optional[bool] = None
 
 
 # ─── Helpers ───
@@ -100,34 +106,42 @@ def default_base_url_for_provider(provider: str) -> str:
     return mapping.get(provider.lower(), "")
 
 
+def to_model_item(row: ProviderModel) -> ModelItem:
+    return ModelItem(
+        id=row.id,
+        provider=row.provider,
+        model_id=row.model_id,
+        display_name=row.display_name,
+        owned_by=row.owned_by,
+        raw_created=row.raw_created,
+        enabled=row.enabled,
+        synced_at=row.synced_at.isoformat(),
+    )
+
+
 # ─── Endpoints ───
 
 @router.get("", response_model=List[ModelItem])
-async def list_models(request: Request, provider: Optional[str] = None):
-    """List all synced models, optionally filtered by provider."""
+async def list_models(
+    request: Request,
+    provider: Optional[str] = None,
+    enabled: Optional[bool] = None,
+):
+    """List synced models, optionally filtered by provider and enabled state."""
     db_path = _get_db_path(request)
     session = get_session(db_path)
     try:
         stmt = select(ProviderModel)
         if provider:
             stmt = stmt.where(ProviderModel.provider == provider)
+        if enabled is not None:
+            stmt = stmt.where(ProviderModel.enabled == enabled)
         stmt = stmt.order_by(ProviderModel.provider, ProviderModel.model_id)
         rows = session.exec(stmt).all()
     finally:
         session.close()
 
-    return [
-        ModelItem(
-            id=r.id,
-            provider=r.provider,
-            model_id=r.model_id,
-            display_name=r.display_name,
-            owned_by=r.owned_by,
-            raw_created=r.raw_created,
-            synced_at=r.synced_at.isoformat(),
-        )
-        for r in rows
-    ]
+    return [to_model_item(r) for r in rows]
 
 
 @router.post("/manual", response_model=ModelItem)
@@ -186,20 +200,40 @@ async def add_manual_model(
             display_name=display,
             owned_by=None,
             raw_created=None,
+            enabled=False,
             synced_at=now,
         )
         session.add(row)
         session.commit()
         session.refresh(row)
-        return ModelItem(
-            id=row.id,
-            provider=row.provider,
-            model_id=row.model_id,
-            display_name=row.display_name,
-            owned_by=row.owned_by,
-            raw_created=row.raw_created,
-            synced_at=row.synced_at.isoformat(),
-        )
+        return to_model_item(row)
+    finally:
+        session.close()
+
+
+@router.put("/{model_id}", response_model=ModelItem)
+async def update_model(
+    model_id: str,
+    request: Request,
+    body: UpdateModelBody,
+    _: bool = Depends(verify_auth_token),
+):
+    """Update a synced/manual model catalog row."""
+    db_path = _get_db_path(request)
+    init_db(db_path)
+    session = get_session(db_path)
+    try:
+        row = session.get(ProviderModel, model_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Model not found")
+        if body.display_name is not None:
+            row.display_name = body.display_name.strip() or None
+        if body.enabled is not None:
+            row.enabled = body.enabled
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return to_model_item(row)
     finally:
         session.close()
 
@@ -291,6 +325,7 @@ async def sync_models(
                     display_name=model_id,
                     owned_by=m.get("owned_by"),
                     raw_created=m.get("created"),
+                    enabled=False,
                     synced_at=now,
                 )
                 session.add(row)

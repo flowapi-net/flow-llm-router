@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from flow_llm_router.db.models import ProviderKey, RequestLog, VaultMeta
+from flow_llm_router.db.models import ProviderKey, ProviderModel, RequestLog, VaultMeta
 
 
 # ════════════════════════════════════════════════════════════════
@@ -219,3 +219,13 @@ class TestProviderKey:
         db_session.commit()
         db_session.refresh(pk)
         assert pk.extra_config is None
+
+
+class TestProviderModel:
+    def test_enabled_defaults_false(self, db_session):
+        model = ProviderModel(provider="openai", model_id="gpt-test")
+        db_session.add(model)
+        db_session.commit()
+        db_session.refresh(model)
+
+        assert model.enabled is False

@@ -13,7 +13,7 @@ import pytest
 from sqlmodel import select
 
 from flow_llm_router.db.engine import get_session
-from flow_llm_router.db.models import RequestLog
+from flow_llm_router.db.models import ProviderModel, RequestLog
 
 
 # ── LiteLLM Mock Factories ────────────────────────────────────────────────────
@@ -326,6 +326,33 @@ class TestModelsList:
         models = [m["id"] for m in data["data"]]
         assert "gpt-4o" in models
         assert "gpt-4o-mini" in models
+
+    async def test_get_models_filters_disabled_catalog_rows(self, client, test_settings):
+        session = get_session(test_settings.database.path)
+        try:
+            session.add(ProviderModel(provider="openai", model_id="enabled-model", enabled=True))
+            session.add(ProviderModel(provider="openai", model_id="disabled-model", enabled=False))
+            session.commit()
+        finally:
+            session.close()
+
+        resp = await client.get("/v1/models")
+        assert resp.status_code == 200
+        models = [m["id"] for m in resp.json()["data"]]
+        assert "enabled-model" in models
+        assert "disabled-model" not in models
+
+    async def test_get_models_does_not_fallback_when_catalog_is_all_disabled(self, client, test_settings):
+        session = get_session(test_settings.database.path)
+        try:
+            session.add(ProviderModel(provider="openai", model_id="disabled-model", enabled=False))
+            session.commit()
+        finally:
+            session.close()
+
+        resp = await client.get("/v1/models")
+        assert resp.status_code == 200
+        assert resp.json()["data"] == []
 
 
 # ════════════════════════════════════════════════════════════════

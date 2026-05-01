@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from flow_llm_router.db.models import RequestLog
+from flow_llm_router.db.engine import get_session
+from flow_llm_router.db.models import ProviderModel, RequestLog
 
 
 # ════════════════════════════════════════════════════════════════
@@ -311,6 +312,47 @@ class TestStatsProviders:
         resp = await client.get("/api/stats/providers")
         assert resp.status_code == 200
         assert resp.json()["data"] == []
+
+
+class TestModelsAPI:
+    async def test_list_models_filters_by_enabled_state(self, authed_client, test_settings):
+        session = get_session(test_settings.database.path)
+        try:
+            session.add(ProviderModel(provider="openai", model_id="enabled-model", enabled=True))
+            session.add(ProviderModel(provider="openai", model_id="disabled-model", enabled=False))
+            session.commit()
+        finally:
+            session.close()
+
+        enabled_resp = await authed_client.get("/api/models?enabled=true")
+        assert enabled_resp.status_code == 200
+        enabled_ids = {row["model_id"] for row in enabled_resp.json()}
+        assert enabled_ids == {"enabled-model"}
+
+        disabled_resp = await authed_client.get("/api/models?enabled=false")
+        assert disabled_resp.status_code == 200
+        disabled_ids = {row["model_id"] for row in disabled_resp.json()}
+        assert disabled_ids == {"disabled-model"}
+
+    async def test_toggle_model_enabled(self, authed_client, test_settings):
+        session = get_session(test_settings.database.path)
+        try:
+            row = ProviderModel(provider="openai", model_id="toggle-me", enabled=True)
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            model_id = row.id
+        finally:
+            session.close()
+
+        resp = await authed_client.put(f"/api/models/{model_id}", json={"enabled": False})
+        assert resp.status_code == 200
+        assert resp.json()["enabled"] is False
+
+        list_resp = await authed_client.get("/api/models")
+        rows = list_resp.json()
+        toggled = next(item for item in rows if item["id"] == model_id)
+        assert toggled["enabled"] is False
 
 
 class TestLogs:

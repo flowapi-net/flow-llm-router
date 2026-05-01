@@ -31,6 +31,20 @@ def init_db(db_path: str = "./data.db"):
     """Create all tables if they don't exist."""
     engine = get_engine(db_path)
     SQLModel.metadata.create_all(engine)
+    _migrate_existing_schema(engine)
+
+
+def _migrate_existing_schema(engine: Any) -> None:
+    """Apply small additive migrations for existing SQLite databases."""
+    with engine.begin() as conn:
+        columns = {
+            row[1]
+            for row in conn.exec_driver_sql("PRAGMA table_info(provider_models)").fetchall()
+        }
+        if "enabled" not in columns:
+            conn.exec_driver_sql(
+                "ALTER TABLE provider_models ADD COLUMN enabled BOOLEAN NOT NULL DEFAULT 0"
+            )
 
 
 def get_session(db_path: str = "./data.db") -> Session:

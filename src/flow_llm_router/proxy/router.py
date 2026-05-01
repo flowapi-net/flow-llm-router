@@ -565,19 +565,26 @@ async def list_models(request: Request):
     db_path = _get_db_path(request)
     session = get_session(db_path)
     try:
-        rows = session.exec(select(ProviderModel).order_by(ProviderModel.provider, ProviderModel.model_id)).all()
+        catalog_rows = session.exec(select(ProviderModel.id)).all()
+        rows = session.exec(
+            select(ProviderModel)
+            .where(ProviderModel.enabled == True)  # noqa: E712
+            .order_by(ProviderModel.provider, ProviderModel.model_id)
+        ).all()
     except Exception:
+        catalog_rows = []
         rows = []
     finally:
         session.close()
 
-    if rows:
+    if rows or catalog_rows:
         data = [
             {
                 "id": r.model_id,
                 "object": "model",
                 "created": r.raw_created or 0,
                 "owned_by": r.owned_by or r.provider,
+                "enabled": r.enabled,
             }
             for r in rows
         ]
