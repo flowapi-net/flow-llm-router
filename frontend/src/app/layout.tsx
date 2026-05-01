@@ -37,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <NavLink href="/providers/">Providers</NavLink>
                   <NavLink href="/models/">Models</NavLink>
                   <NavLink href="/router/">Router</NavLink>
+                  <NavLink href="/search/">Search</NavLink>
                   <NavLink href="/integrate/">API</NavLink>
                   <NavLink href="/settings/">Settings</NavLink>
                 </div>

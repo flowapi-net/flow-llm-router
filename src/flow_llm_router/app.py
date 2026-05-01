@@ -19,9 +19,17 @@ from flow_llm_router.api.dashboard import router as dashboard_router
 from flow_llm_router.api.keys import router as keys_router
 from flow_llm_router.api.models import router as models_router
 from flow_llm_router.api.router_config import router as router_config_router
+from flow_llm_router.api.search import router as search_router
 from flow_llm_router.config import Settings, load_settings
 from flow_llm_router.db.engine import get_session, init_db
-from flow_llm_router.db.models import CallerToken, ProviderKey, ProviderModel, RouterConfig, VaultMeta
+from flow_llm_router.db.models import (
+    CallerToken,
+    ProviderKey,
+    ProviderModel,
+    RouterConfig,
+    SearchProviderKey,
+    VaultMeta,
+)
 from flow_llm_router.proxy.router import router as proxy_router
 from flow_llm_router.security.ip_guard import IPGuardMiddleware
 from flow_llm_router.security.master_key_store import load_master_key
@@ -84,6 +92,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(models_router)
     app.include_router(caller_tokens_router)
     app.include_router(router_config_router)
+    app.include_router(search_router)
 
     static_dir = Path(__file__).parent / "static"
     if static_dir.exists() and any(static_dir.iterdir()):
@@ -150,15 +159,21 @@ def _try_auto_unlock(vault: Vault, settings: Settings) -> None:
         from sqlmodel import select
 
         keys = session.exec(select(ProviderKey).where(ProviderKey.enabled == True)).all()  # noqa: E712
+        search_keys = session.exec(
+            select(SearchProviderKey).where(SearchProviderKey.enabled == True)  # noqa: E712
+        ).all()
+        validation_ciphertext = keys[0].encrypted_key if keys else None
+        if validation_ciphertext is None and search_keys:
+            validation_ciphertext = search_keys[0].encrypted_key
 
         # Preferred path: persisted Fernet key file
         stored_key = load_master_key(settings)
         if stored_key:
             try:
                 vault.initialize_from_key(stored_key)
-                if keys:
+                if validation_ciphertext:
                     # Validate key against one ciphertext before accepting unlock.
-                    vault.decrypt_key(keys[0].encrypted_key)
+                    vault.decrypt_key(validation_ciphertext)
                 vault.load_encrypted_cache(keys)
                 logger.info("Vault auto-unlocked via persisted master key (%d keys loaded)", len(keys))
                 return

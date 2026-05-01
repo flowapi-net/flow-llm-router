@@ -47,6 +47,22 @@ class ProviderKey(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_utcnow)
 
 
+class SearchProviderKey(SQLModel, table=True):
+    """Encrypted search provider API key stored in SQLite."""
+
+    __tablename__ = "search_provider_keys"
+
+    id: str = Field(default_factory=_uuid, primary_key=True)
+    provider: str = Field(index=True)
+    key_name: str
+    encrypted_key: str
+    key_suffix: str
+    base_url: Optional[str] = None
+    enabled: bool = True
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
 class CallerToken(SQLModel, table=True):
     """Access token issued to external services that call the proxy."""
 
