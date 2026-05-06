@@ -12,7 +12,10 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlmodel import select
 
-from flow_llm_router.api.caller_tokens import validate_caller_token
+from flow_llm_router.api.caller_tokens import (
+    is_caller_token_auth_enabled,
+    validate_caller_token,
+)
 from flow_llm_router.config import LoggingConfig, Settings
 from flow_llm_router.db.engine import get_session
 from flow_llm_router.db.models import ProviderKey, ProviderModel, RequestLog
@@ -130,6 +133,8 @@ def _build_litellm_kwargs(
 # ─── Caller token validation ───
 
 def _check_caller_token(request: Request, body_api_key: str | None, db_path: str) -> bool:
+    if not is_caller_token_auth_enabled(request):
+        return True
     auth = request.headers.get("Authorization", "")
     token = auth[7:] if auth.startswith("Bearer ") else (body_api_key or "")
     return validate_caller_token(db_path, token)

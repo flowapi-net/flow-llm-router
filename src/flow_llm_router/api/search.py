@@ -12,7 +12,10 @@ from pydantic import BaseModel, Field as PydanticField
 from sqlmodel import select
 
 from flow_llm_router.api.auth import verify_auth_token
-from flow_llm_router.api.caller_tokens import validate_caller_token
+from flow_llm_router.api.caller_tokens import (
+    is_caller_token_auth_enabled,
+    validate_caller_token,
+)
 from flow_llm_router.db.engine import get_session
 from flow_llm_router.db.models import SearchProviderKey
 from flow_llm_router.security.vault import Vault
@@ -319,12 +322,13 @@ async def test_search_provider(
 @router.post("/tavily")
 async def tavily_search(body: TavilySearchRequest, request: Request):
     db_path = _get_db_path(request)
-    caller_token = _extract_caller_token(request, body.api_key)
-    if not caller_token or not validate_caller_token(db_path, caller_token):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or missing Flow LLM Router access token",
-        )
+    if is_caller_token_auth_enabled(request):
+        caller_token = _extract_caller_token(request, body.api_key)
+        if not caller_token or not validate_caller_token(db_path, caller_token):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or missing Flow LLM Router access token",
+            )
 
     vault = _get_vault(request)
     row = _first_enabled_tavily_key(db_path)

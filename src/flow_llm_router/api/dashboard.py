@@ -20,6 +20,16 @@ def _get_db_path(request: Request) -> str:
     return getattr(request.app.state, "db_path", "./data.db")
 
 
+def _utc_iso(dt: datetime | None) -> str | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.isoformat()
+
+
 def _period_start(period: str) -> datetime:
     now = datetime.now(timezone.utc)
     if period == "today":
@@ -235,7 +245,7 @@ async def list_logs(
         for log in logs:
             data.append({
                 "id": log.id,
-                "created_at": log.created_at.isoformat() if log.created_at else None,
+                "created_at": _utc_iso(log.created_at),
                 "model_requested": log.model_requested,
                 "model_used": log.model_used,
                 "provider": log.provider,
@@ -278,7 +288,7 @@ async def get_log(log_id: str, request: Request):
             )
         data = {
             "id": log.id,
-            "created_at": log.created_at.isoformat() if log.created_at else None,
+            "created_at": _utc_iso(log.created_at),
             "model_requested": log.model_requested,
             "model_used": log.model_used,
             "provider": log.provider,
@@ -394,4 +404,3 @@ async def update_ip_whitelist(
             "allowed_ips": ip_cfg.allowed_ips,
         },
     }
-

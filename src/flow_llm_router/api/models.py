@@ -83,15 +83,31 @@ async def _fetch_models_from_provider(
     api_key: str,
     base_url: str,
 ) -> list[dict]:
-    """Call GET {base_url}/models and return the model list."""
-    url = base_url.rstrip("/") + "/models"
+    """Call an OpenAI-compatible models endpoint and return the model list.
+
+    Try the common ``/v1/models`` path first, then fall back to ``/models`` for
+    providers that expose a nonstandard root.
+    """
+    urls = [
+        base_url.rstrip("/") + "/v1/models",
+        base_url.rstrip("/") + "/models",
+    ]
     async with httpx.AsyncClient(timeout=20) as client:
-        resp = await client.get(
-            url,
-            headers={"Authorization": f"Bearer {api_key}"},
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        last_error: Exception | None = None
+        for url in urls:
+            try:
+                resp = await client.get(
+                    url,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                break
+            except Exception as exc:
+                last_error = exc
+        else:
+            assert last_error is not None
+            raise last_error
     # OpenAI-compatible: {"object":"list","data":[{"id":...},...]}
     if isinstance(data, dict) and "data" in data:
         return data["data"]

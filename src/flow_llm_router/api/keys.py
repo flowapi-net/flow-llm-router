@@ -11,7 +11,7 @@ from sqlmodel import select
 
 from flow_llm_router.api.auth import verify_auth_token
 from flow_llm_router.db.engine import get_session
-from flow_llm_router.db.models import ProviderKey
+from flow_llm_router.db.models import ProviderKey, ProviderModel
 from flow_llm_router.security.vault import Vault
 
 router = APIRouter(prefix="/api/keys", tags=["keys"])
@@ -213,6 +213,11 @@ async def delete_key(
         if pk is None:
             raise HTTPException(status_code=404, detail="Key not found")
         provider = pk.provider
+        models = session.exec(
+            select(ProviderModel).where(ProviderModel.provider == provider)
+        ).all()
+        for model in models:
+            session.delete(model)
         session.delete(pk)
         session.commit()
     finally:

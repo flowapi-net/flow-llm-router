@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
+from sqlmodel import select
 
 from flow_llm_router.db.engine import get_session
 from flow_llm_router.db.models import ProviderModel, RequestLog
@@ -197,6 +198,33 @@ class TestKeysDelete:
 
         list_resp = await authed_client.get("/api/keys")
         assert len(list_resp.json()) == 0
+
+    async def test_delete_removes_provider_models(self, authed_client, test_settings):
+        add_resp = await authed_client.post("/api/keys", json={
+            "provider": "openai",
+            "key_name": "OpenAI",
+            "api_key": "sk-openai1234567890abcdef",
+        })
+        key_id = add_resp.json()["id"]
+
+        session = get_session(test_settings.database.path)
+        try:
+            session.add(ProviderModel(provider="openai", model_id="gpt-delete-me"))
+            session.add(ProviderModel(provider="anthropic", model_id="keep-me"))
+            session.commit()
+        finally:
+            session.close()
+
+        del_resp = await authed_client.delete(f"/api/keys/{key_id}")
+        assert del_resp.status_code == 200
+
+        session = get_session(test_settings.database.path)
+        try:
+            rows = session.exec(select(ProviderModel)).all()
+        finally:
+            session.close()
+
+        assert {(row.provider, row.model_id) for row in rows} == {("anthropic", "keep-me")}
 
     async def test_delete_not_found(self, authed_client):
         resp = await authed_client.delete("/api/keys/nonexistent-uuid")

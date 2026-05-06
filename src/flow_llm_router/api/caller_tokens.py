@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import hashlib
 import secrets
 from datetime import datetime, timezone
@@ -18,6 +19,28 @@ from flow_llm_router.db.models import CallerToken
 router = APIRouter(prefix="/api/caller-tokens", tags=["caller-tokens"])
 
 TOKEN_PREFIX = "fgt_"
+
+
+def is_caller_token_auth_enabled(request: Request) -> bool:
+    """Whether proxy/search endpoints should enforce caller token auth.
+
+    Behavior:
+    - `FLOW_LLM_ROUTER_ENFORCE_CALLER_TOKENS=1` always enforces.
+    - `FLOW_LLM_ROUTER_DISABLE_CALLER_TOKENS=1` always disables.
+    - Otherwise follow `settings.security.vault_enabled`.
+    """
+    force_on = os.getenv("FLOW_LLM_ROUTER_ENFORCE_CALLER_TOKENS", "").strip().lower()
+    if force_on in {"1", "true", "yes", "on"}:
+        return True
+
+    force_off = os.getenv("FLOW_LLM_ROUTER_DISABLE_CALLER_TOKENS", "").strip().lower()
+    if force_off in {"1", "true", "yes", "on"}:
+        return False
+
+    settings = getattr(request.app.state, "settings", None)
+    if settings is None:
+        return True
+    return bool(getattr(settings.security, "vault_enabled", True))
 
 
 def _get_db_path(request: Request) -> str:
