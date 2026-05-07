@@ -126,7 +126,7 @@ This avoids provider mismatches for some third-party OpenAI-compatible embedding
 
 For `GET /v1/models`, Flow LLM Router returns:
 
-- synced provider models from `provider_models`, if available
+- synced provider models from `provider_models`, if available, using full routing ids like `provider/model_id`
 - otherwise a minimal default model list
 
 This keeps OpenAI-style clients usable even before the first catalog sync.

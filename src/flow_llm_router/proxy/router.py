@@ -585,7 +585,7 @@ async def list_models(request: Request):
     if rows or catalog_rows:
         data = [
             {
-                "id": r.model_id,
+                "id": f"{r.provider}/{r.model_id}",
                 "object": "model",
                 "created": r.raw_created or 0,
                 "owned_by": r.owned_by or r.provider,

@@ -339,8 +339,8 @@ class TestModelsList:
         resp = await client.get("/v1/models")
         assert resp.status_code == 200
         models = [m["id"] for m in resp.json()["data"]]
-        assert "enabled-model" in models
-        assert "disabled-model" not in models
+        assert "openai/enabled-model" in models
+        assert "openai/disabled-model" not in models
 
     async def test_get_models_does_not_fallback_when_catalog_is_all_disabled(self, client, test_settings):
         session = get_session(test_settings.database.path)
@@ -353,6 +353,21 @@ class TestModelsList:
         resp = await client.get("/v1/models")
         assert resp.status_code == 200
         assert resp.json()["data"] == []
+
+    async def test_get_models_returns_full_route_ids(self, client, test_settings):
+        session = get_session(test_settings.database.path)
+        try:
+            session.add(ProviderModel(provider="siliconflow", model_id="Qwen/Qwen3.6-35B-A3B", enabled=True))
+            session.add(ProviderModel(provider="siliconflow", model_id="deepseek-ai/DeepSeek-V4-Flash", enabled=True))
+            session.commit()
+        finally:
+            session.close()
+
+        resp = await client.get("/v1/models")
+        assert resp.status_code == 200
+        models = {m["id"] for m in resp.json()["data"]}
+        assert "siliconflow/Qwen/Qwen3.6-35B-A3B" in models
+        assert "siliconflow/deepseek-ai/DeepSeek-V4-Flash" in models
 
 
 # ════════════════════════════════════════════════════════════════
