@@ -440,6 +440,95 @@ class TestModelsAPI:
         assert captured["api_key"] == "sk-test-model-key"
         assert captured["api_base"] == "https://example.test/v1"
         assert captured["model"] == "openai/gpt-test"
+        assert captured["temperature"] == 0
+
+    async def test_test_model_omits_zero_temperature_for_gpt5(self, authed_client, test_settings):
+        await authed_client.post(
+            "/api/keys",
+            json={
+                "provider": "openai",
+                "key_name": "openai-default",
+                "api_key": "sk-test-model-key",
+                "extra_config": json.dumps({"base_url": "https://example.test/v1"}),
+            },
+        )
+        session = get_session(test_settings.database.path)
+        try:
+            row = ProviderModel(provider="openai", model_id="gpt-5.3-codex", enabled=True)
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            model_id = row.id
+        finally:
+            session.close()
+
+        captured = {}
+
+        async def fake_completion(**kwargs):
+            captured.update(kwargs)
+            return _FakeLLMResponse()
+
+        with patch("flow_llm_router.api.models.litellm.acompletion", new=fake_completion):
+            resp = await authed_client.post(f"/api/models/{model_id}/test")
+
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+        assert captured["model"] == "openai/gpt-5.3-codex"
+        assert "temperature" not in captured
+
+    async def test_test_embedding_model_uses_embeddings_endpoint(self, authed_client, test_settings):
+        await authed_client.post(
+            "/api/keys",
+            json={
+                "provider": "siliconflow",
+                "key_name": "siliconflow-default",
+                "api_key": "sk-test-model-key",
+                "extra_config": json.dumps({"base_url": "https://example.test/v1"}),
+            },
+        )
+        session = get_session(test_settings.database.path)
+        try:
+            row = ProviderModel(provider="siliconflow", model_id="Qwen/Qwen3-Embedding-0.6B", enabled=True)
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            model_id = row.id
+        finally:
+            session.close()
+
+        captured = {}
+
+        class FakeHTTPResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"data": [{"embedding": [0.1, 0.2, 0.3]}]}
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return None
+
+            async def post(self, url, **kwargs):
+                captured["url"] = url
+                captured.update(kwargs)
+                return FakeHTTPResponse()
+
+        with patch("flow_llm_router.api.models.httpx.AsyncClient", new=FakeAsyncClient):
+            resp = await authed_client.post(f"/api/models/{model_id}/test")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["response_preview"] == "embedding dims=3"
+        assert captured["url"] == "https://example.test/v1/embeddings"
+        assert captured["json"] == {"model": "Qwen/Qwen3-Embedding-0.6B", "input": "ping"}
 
     async def test_test_model_requires_auth(self, client, test_settings):
         session = get_session(test_settings.database.path)

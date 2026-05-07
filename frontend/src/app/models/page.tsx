@@ -188,12 +188,16 @@ export default function ModelsPage() {
   const filtered = useMemo(() => {
     return models.filter((m) => {
       const matchProvider = activeProvider === "all" || m.provider === activeProvider;
+      const matchEnabled =
+        enabledFilter === "all" ||
+        (enabledFilter === "enabled" && m.enabled) ||
+        (enabledFilter === "disabled" && !m.enabled);
       const q = search.toLowerCase();
       const fullName = `${m.provider}/${m.model_id}`;
       const matchSearch = !q || fullName.toLowerCase().includes(q);
-      return matchProvider && matchSearch;
+      return matchProvider && matchEnabled && matchSearch;
     });
-  }, [models, activeProvider, search]);
+  }, [models, activeProvider, enabledFilter, search]);
 
   const handleAddModel = async () => {
     setAddError("");
@@ -239,16 +243,22 @@ export default function ModelsPage() {
   };
 
   const toggleModelEnabled = async (model: ModelItem) => {
+    const nextEnabled = !model.enabled;
     setSavingModelId(model.id);
+    setModels((prev) => prev.map((m) => (m.id === model.id ? { ...m, enabled: nextEnabled } : m)));
     try {
-      await fetchAPI<ModelItem>(`/models/${model.id}`, {
+      const updated = await fetchAPI<ModelItem>(`/models/${model.id}`, {
         method: "PUT",
-        body: JSON.stringify({ enabled: !model.enabled }),
+        body: JSON.stringify({ enabled: nextEnabled }),
       });
-      await loadModels();
+      setModels((prev) => prev.map((m) => (m.id === model.id ? updated : m)));
     } catch (e: any) {
+      setModels((prev) => prev.map((m) => (m.id === model.id ? model : m)));
       if (e instanceof AuthExpiredError) {
-        requireAuth(() => { void toggleModelEnabled(model); });
+        requireAuth(() => {
+          setModels((prev) => prev.map((m) => (m.id === model.id ? model : m)));
+          void toggleModelEnabled(model);
+        });
       } else {
         alert(e.message || "保存失败");
       }

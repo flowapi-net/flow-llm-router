@@ -157,6 +157,36 @@ def _base_url_for_model_test(provider: str, pk: ProviderKey) -> str:
     return default_base_url_for_provider(provider)
 
 
+def _supports_zero_temperature(model_id: str) -> bool:
+    normalized = model_id.lower()
+    if normalized.startswith("openai/"):
+        normalized = normalized[len("openai/") :]
+    return not normalized.startswith("gpt-5")
+
+
+def _is_embedding_model(model_id: str) -> bool:
+    normalized = model_id.lower()
+    if normalized.startswith("openai/"):
+        normalized = normalized[len("openai/") :]
+    if "rerank" in normalized:
+        return False
+    return (
+        "embedding" in normalized
+        or "embed" in normalized
+        or normalized.startswith("bge-")
+        or "/bge-" in normalized
+        or normalized.startswith("bge_")
+        or "/bge_" in normalized
+    )
+
+
+def _upstream_model_id(row: ProviderModel) -> str:
+    upstream = row.model_id
+    if upstream.lower().startswith(row.provider.lower() + "/"):
+        upstream = upstream[len(row.provider) + 1 :]
+    return upstream
+
+
 def _model_test_litellm_kwargs(row: ProviderModel, api_key: str, base_url: str) -> dict:
     kwargs: dict = {
         "api_key": api_key,
@@ -164,19 +194,57 @@ def _model_test_litellm_kwargs(row: ProviderModel, api_key: str, base_url: str) 
             {"role": "system", "content": "You are a connectivity test endpoint."},
             {"role": "user", "content": "Reply with exactly OK."},
         ],
-        "temperature": 0,
         "max_tokens": 8,
     }
+    if _supports_zero_temperature(row.model_id):
+        kwargs["temperature"] = 0
     if base_url:
-        upstream = row.model_id
-        if upstream.lower().startswith(row.provider.lower() + "/"):
-            upstream = upstream[len(row.provider) + 1 :]
+        upstream = _upstream_model_id(row)
         kwargs["model"] = f"openai/{upstream}"
         kwargs["api_base"] = base_url
         kwargs["allowed_openai_params"] = ["reasoning_effort"]
     else:
         kwargs["model"] = row.model_id
     return kwargs
+
+
+def _embedding_preview(data: dict) -> str:
+    try:
+        first = data.get("data", [])[0]
+        embedding = first.get("embedding", [])
+        if isinstance(embedding, list):
+            return f"embedding dims={len(embedding)}"
+    except Exception:
+        pass
+    return "embedding OK"
+
+
+async def _test_embedding_model(row: ProviderModel, api_key: str, base_url: str) -> str:
+    if base_url:
+        payload = {"model": _upstream_model_id(row), "input": "ping"}
+        url = f"{base_url.rstrip('/')}/embeddings"
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                url,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+        response.raise_for_status()
+        return _embedding_preview(response.json())
+
+    response = await litellm.aembedding(
+        model=row.model_id,
+        api_key=api_key,
+        input="ping",
+    )
+    if hasattr(response, "model_dump"):
+        return _embedding_preview(response.model_dump())
+    if isinstance(response, dict):
+        return _embedding_preview(response)
+    return "embedding OK"
 
 
 def _preview_from_litellm_response(response) -> str:
@@ -356,12 +424,15 @@ async def test_model(
     finally:
         session.close()
 
-    kwargs = _model_test_litellm_kwargs(row, api_key, base_url)
     start = time.monotonic()
     try:
-        response = await litellm.acompletion(**kwargs)
+        if _is_embedding_model(row.model_id):
+            preview = await _test_embedding_model(row, api_key, base_url)
+        else:
+            kwargs = _model_test_litellm_kwargs(row, api_key, base_url)
+            response = await litellm.acompletion(**kwargs)
+            preview = _preview_from_litellm_response(response)
         latency_ms = int((time.monotonic() - start) * 1000)
-        preview = _preview_from_litellm_response(response)
         return TestModelResult(
             ok=True,
             provider=provider,
